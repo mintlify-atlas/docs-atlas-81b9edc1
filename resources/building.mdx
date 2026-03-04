@@ -1,0 +1,307 @@
+---
+title: Building from source
+description: Build WAX Python and TypeScript packages from source code
+---
+
+This guide covers building WAX from source for both Python and TypeScript implementations.
+
+## Prerequisites
+
+Before building WAX, ensure you have the following installed:
+
+- **Protobuf compiler**: Required for generating protocol buffer files
+  ```bash
+  apt install protobuf-compiler
+  ```
+
+- **Git**: For cloning the repository and managing submodules
+- **Python 3.12+**: Required for Python builds
+- **Node.js 20.11+ or 21.2+**: Required for TypeScript builds
+- **pnpm**: Package manager for TypeScript
+- **Poetry 2.1.3**: Python dependency management
+
+## Building Python
+
+The Python implementation uses Cython bindings compiled to native `.so` modules.
+
+### Install Poetry
+
+First, install Poetry if you haven't already:
+
+```bash
+curl -sSL https://install.python-poetry.org | python3 - --version 2.1.3
+```
+
+### Set up build environment
+
+WAX uses a dedicated version of Boost library (statically built). Use the CI base image as your build environment:
+
+- **Base image**: Available at [GitLab Container Registry](https://gitlab.syncad.com/hive/wax/container_registry/556)
+- **Dockerfile**: `python/docker/Dockerfile.ci`
+
+The CI base image includes `WAX_BOOST_ROOT` with pre-compiled Boost library and supports multiple Python versions.
+
+### Build the wheel
+
+From the root project directory, run:
+
+```bash
+./python/wax/scripts/build_wax.sh
+```
+
+This script will:
+
+1. Generate protocol buffer files from the `hive` submodule
+2. Build API packages from the hived OpenAPI specification
+3. Compile Cython bindings
+4. Create a wheel file in the `./dist` directory
+
+### Build for specific Python version
+
+The CI pipeline builds for multiple Python versions:
+
+```bash
+export PYTHON_VERSION=3.12  # or 3.14
+./python/wax/scripts/build_wax.sh
+```
+
+### Build artifacts
+
+After a successful build, you'll find:
+
+- **Wheel file**: `python/wax/dist/hiveio_wax-*.whl`
+- **Build logs**: `python/wax/.build/logs/`
+- **Compiled modules**: `python/wax/wax/*.so`
+- **Generated proto files**: `python/wax/wax/_private/proto/`
+
+## Building TypeScript
+
+The TypeScript implementation uses WebAssembly (WASM) compiled from C++ via Emscripten.
+
+### Install dependencies
+
+From the `ts/` directory:
+
+```bash
+pnpm install
+```
+
+### Build WASM and TypeScript
+
+Build the complete package:
+
+```bash
+pnpm run build
+```
+
+This will:
+
+1. Compile C++ code to WASM using Emscripten
+2. Generate TypeScript types from protocol buffers
+3. Compile TypeScript code
+4. Create a distributable package
+
+### Build tests only
+
+To build just the test suite:
+
+```bash
+pnpm run build:test
+```
+
+### Build artifacts
+
+After a successful build, you'll find:
+
+- **Package tarball**: `ts/wasm/dist/*.tgz`
+- **WASM artifacts**: `ts/wasm/build_wasm/`
+- **Compiled TypeScript**: `ts/wasm/dist/lib/`
+- **Generated proto files**: `ts/wasm/lib/proto/`
+- **Build logs**: `ts/wasm/build_wasm/*.log`
+
+## Installing from source
+
+### Python installation
+
+Create a virtual environment and install:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source ./venv/bin/activate
+
+# Install the wheel
+python3 -m pip install --index-url $FIRST_INDEX --extra-index-url $SECOND_INDEX --extra-index-url $THIRD_INDEX ./dist/CREATED-WAX-WHEEL.whl
+```
+
+<Note>
+  Set the registry environment variables before installing:
+  
+  ```bash
+  export FIRST_INDEX="https://gitlab.syncad.com/api/v4/projects/362/packages/pypi/simple"
+  export SECOND_INDEX="https://gitlab.syncad.com/api/v4/projects/434/packages/pypi/simple"
+  export THIRD_INDEX="https://gitlab.syncad.com/api/v4/projects/198/packages/pypi/simple"
+  ```
+</Note>
+
+### Developer installation script
+
+For development, use the installation script:
+
+```bash
+# Skip build if already built
+export WAX_SKIP_BUILD=true
+
+# Install in development mode
+./python/wax/scripts/install_wax.sh
+```
+
+### TypeScript installation
+
+Install from the built tarball:
+
+```bash
+cd ts
+npm install ./wasm/dist/*.tgz
+```
+
+Or use it in your project:
+
+```bash
+npm install @hiveio/wax
+```
+
+## Debugging Python builds
+
+For debugging Cython code, use a debug build of Python:
+
+```bash
+# Create virtual environment with debug Python
+poetry -C . env use python3.12d
+
+# Install dependencies
+poetry -C . install --no-root
+
+# Build in debug mode
+WAX_DEBUG=1 python3.12d setup.py build_ext --inplace
+
+# Run under debugger
+cygdb . -- --args python3.12d ./test_pure_tx.py
+```
+
+See [Cython debugging documentation](https://cython.readthedocs.io/en/latest/src/userguide/debugging.html#configuring-the-debugger) for more details.
+
+## CI/CD pipeline
+
+The GitLab CI pipeline automates the build process:
+
+### Pipeline stages
+
+1. **prepare**: Build CI base images
+2. **build**: Build wheels and WASM packages
+3. **static_code_analysis**: Run linters and type checkers
+4. **test_python**: Run Python tests
+5. **test**: Run TypeScript tests
+6. **deploy**: Publish packages to registries
+7. **test-tools**: Build and test helper tools
+
+### Key build jobs
+
+- `build_wheel`: Builds Python wheels for multiple Python versions (3.12, 3.14)
+- `wax_wasm_proto_tsc_generation`: Builds TypeScript WASM package
+- `hiveio_api_package`: Generates API packages from hived OpenAPI spec
+- `wax_wasm_build_tests`: Builds test suite
+- `generate_docs`: Generates API documentation
+
+### Build matrix
+
+Python builds run in parallel for multiple versions:
+
+```yaml
+parallel:
+  matrix:
+    - PYTHON_VERSION: ["3.12", "3.14"]
+```
+
+## Project structure
+
+```
+wax/
+├── core/              # Common C++ code shared by Python and TypeScript
+├── hive/              # Git submodule with Hive blockchain source
+├── python/            # Python package source
+│   ├── wax/           # Main package
+│   ├── tests/         # Test suites
+│   └── test_tools/    # Testing utilities
+├── ts/                # TypeScript package source
+│   ├── wasm/          # Core WASM implementation
+│   └── packages/      # Extension packages (signers)
+└── examples/          # Usage examples for both languages
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Protobuf compiler not found">
+    Install the protobuf compiler:
+    
+    ```bash
+    apt install protobuf-compiler
+    ```
+    
+    Or on macOS:
+    
+    ```bash
+    brew install protobuf
+    ```
+  </Accordion>
+  
+  <Accordion title="Poetry not found">
+    Ensure Poetry is installed and in your PATH:
+    
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 - --version 2.1.3
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+  </Accordion>
+  
+  <Accordion title="Python version mismatch">
+    The wheel must match your Python version. Check the wheel filename for the Python tag (e.g., `cp312` for Python 3.12).
+    
+    Build for your specific Python version:
+    
+    ```bash
+    export PYTHON_VERSION=3.12
+    ./python/wax/scripts/build_wax.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing Boost libraries">
+    Use the official CI base image which includes pre-compiled Boost:
+    
+    ```bash
+    docker pull registry.gitlab.syncad.com/hive/wax/ci-base-image:pypa_2_28-13
+    ```
+  </Accordion>
+  
+  <Accordion title="WASM build fails">
+    Ensure you have initialized the git submodules:
+    
+    ```bash
+    git submodule update --init --recursive
+    ```
+    
+    Check the build logs in `ts/wasm/build_wasm/*.log` for specific errors.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Running tests" icon="flask" href="/resources/testing">
+    Learn how to run tests and examples
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/resources/contributing">
+    Contribute to the WAX project
+  </Card>
+</CardGroup>

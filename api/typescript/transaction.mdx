@@ -1,0 +1,523 @@
+---
+title: ITransaction interface
+description: Build, sign, and manage Hive blockchain transactions
+---
+
+The `ITransaction` interface provides methods for building, signing, and managing blockchain transactions. It supports both simple inline operations and complex operation builders.
+
+## Creating transactions
+
+Transactions are created using WAX instance methods:
+
+```typescript
+// Offline: Manual TAPOS
+const tx = wax.createTransactionWithTaPoS(headBlockId, "+1m");
+
+// Online: Automatic TAPOS
+const tx = await chain.createTransaction("+5m");
+
+// From existing JSON
+const tx = wax.createTransactionFromJson(apiTxJson);
+
+// From protobuf
+const tx = wax.createTransactionFromProto(protoTx);
+```
+
+## Adding operations
+
+### pushOperation
+
+Pushes an operation to the transaction. Supports both inline operations and complex operation builders.
+
+```typescript
+pushOperation(op: operation | OperationBase): this;
+```
+
+<ParamField path="op" type="operation | OperationBase" required>
+  Operation to add. Can be:
+  - Inline operation object
+  - Complex operation class instance (BlogPostOperation, ReplyOperation, etc.)
+</ParamField>
+
+<ResponseField name="this" type="ITransaction">
+  Returns the transaction instance for method chaining
+</ResponseField>
+
+#### Inline operation example
+
+```typescript
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+```
+
+#### Complex operation example
+
+```typescript
+import { BlogPostOperation } from '@hiveio/wax';
+
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  category: "hive-174695",
+  title: "My awesome post",
+  body: "This is the post content",
+  permlink: "my-awesome-post",
+  tags: ["blog", "travel"],
+  description: "A post about my travels"
+}));
+```
+
+## Transaction properties
+
+### id
+
+Generates the transaction ID (HF26 serialization).
+
+```typescript
+get id(): TTransactionId;
+```
+
+<ResponseField name="TTransactionId" type="string">
+  Transaction ID in hex form (20 bytes)
+</ResponseField>
+
+### legacy_id
+
+Generates the transaction ID (legacy serialization).
+
+```typescript
+get legacy_id(): TTransactionId;
+```
+
+### sigDigest
+
+Generates the digest for signing (HF26 serialization).
+
+```typescript
+get sigDigest(): THexString;
+```
+
+<ResponseField name="THexString" type="string">
+  Transaction digest in hex form for signature generation
+</ResponseField>
+
+### legacy_sigDigest
+
+Generates the digest for signing (legacy serialization).
+
+```typescript
+get legacy_sigDigest(): THexString;
+```
+
+### transaction
+
+Returns the underlying protobuf transaction object.
+
+```typescript
+get transaction(): transaction;
+```
+
+### impactedAccounts
+
+Retrieves account names impacted by the transaction.
+
+```typescript
+get impactedAccounts(): Set<TAccountName>;
+```
+
+<ResponseField name="Set<TAccountName>" type="Set<string>">
+  Set of account names impacted by all operations in the transaction
+</ResponseField>
+
+### signatureKeys
+
+Returns public keys from the transaction signatures.
+
+```typescript
+get signatureKeys(): Array<THexString>;
+```
+
+<ResponseField name="Array<THexString>" type="Array<string>">
+  List of all public keys that were used to sign the transaction
+</ResponseField>
+
+### requiredAuthorities
+
+Returns required authority accounts from the transaction.
+
+```typescript
+get requiredAuthorities(): TTransactionRequiredAuthorities;
+```
+
+<ResponseField name="TTransactionRequiredAuthorities" type="TTransactionRequiredAuthorities">
+  <Expandable title="properties">
+    <ResponseField name="posting" type="Set<string>">
+      Accounts requiring posting authority
+    </ResponseField>
+    <ResponseField name="active" type="Set<string>">
+      Accounts requiring active authority
+    </ResponseField>
+    <ResponseField name="owner" type="Set<string>">
+      Accounts requiring owner authority
+    </ResponseField>
+    <ResponseField name="other" type="Array<authority>">
+      Other custom authorities
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### binaryViewMetadata
+
+Retrieves transaction binary view packed AST data.
+
+```typescript
+get binaryViewMetadata(): IBinaryViewOutputData;
+```
+
+<ResponseField name="IBinaryViewOutputData" type="IBinaryViewOutputData">
+  <Expandable title="properties">
+    <ResponseField name="binary" type="string">
+      Binary representation in hex
+    </ResponseField>
+    <ResponseField name="offsets" type="IBinaryViewNode[]">
+      AST node structure with offsets
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Signing
+
+### addSignature
+
+Adds a signature to the transaction.
+
+```typescript
+addSignature(signature: THexString): this;
+```
+
+<ParamField path="signature" type="THexString" required>
+  Signature in hexadecimal format
+</ParamField>
+
+<ResponseField name="this" type="ITransaction">
+  Returns the transaction instance for method chaining
+</ResponseField>
+
+#### Usage with signature providers
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+import { createBeekeeperSigner } from '@hiveio/wax-signers-beekeeper';
+
+const chain = await createHiveChain();
+const signer = await createBeekeeperSigner({
+  /* beekeeper config */
+});
+
+// Create transaction
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Sign with provider
+const signature = await signer.signTransaction(tx.sigDigest);
+tx.addSignature(signature);
+
+// Broadcast
+await chain.api.network_broadcast_api.broadcast_transaction({
+  trx: tx.toApiJson()
+});
+```
+
+### isSigned
+
+Checks if the transaction has been signed.
+
+```typescript
+isSigned(): boolean;
+```
+
+<ResponseField name="boolean" type="boolean">
+  Returns true if at least one signature is present
+</ResponseField>
+
+## Validation
+
+### validate
+
+Validates the current transaction.
+
+```typescript
+validate(): void;
+```
+
+Throws `WaxError` on validation error.
+
+#### Usage example
+
+```typescript
+try {
+  tx.validate();
+  console.log('Transaction is valid');
+} catch (error) {
+  console.error('Validation failed:', error.message);
+}
+```
+
+## Serialization
+
+### toApi
+
+Converts the transaction to Hive API-form string (HF26).
+
+```typescript
+toApi(): string;
+```
+
+<ResponseField name="string" type="string">
+  Transaction in Hive API-form JSON string
+</ResponseField>
+
+### toApiJson
+
+Converts the transaction to Hive API-form JSON object (HF26).
+
+```typescript
+toApiJson(): ApiTransaction;
+```
+
+<ResponseField name="ApiTransaction" type="ApiTransaction">
+  Transaction in Hive API-form JSON object
+</ResponseField>
+
+### toLegacyApi
+
+Converts the transaction to legacy Hive API-form string.
+
+```typescript
+toLegacyApi(): string;
+```
+
+**Note:** Legacy form is deprecated. It produces larger binary serialization output and is more error-prone.
+
+### toString
+
+Converts the transaction to protobuf JSON string.
+
+```typescript
+toString(): string;
+```
+
+### toBinaryForm
+
+Converts the transaction to HF26 binary form.
+
+```typescript
+toBinaryForm(stripToUnsignedTransaction?: boolean): THexString;
+```
+
+<ParamField path="stripToUnsignedTransaction" type="boolean">
+  Optional flag to strip signatures from the binary output
+</ParamField>
+
+<ResponseField name="THexString" type="string">
+  Transaction in hexadecimal binary form
+</ResponseField>
+
+## Encryption
+
+### startEncrypt
+
+Starts encryption chain for operations.
+
+```typescript
+startEncrypt(
+  mainEncryptionKey: TPublicKey,
+  otherEncryptionKey?: TPublicKey
+): this & IEncryptingTransaction<this>;
+```
+
+<ParamField path="mainEncryptionKey" type="TPublicKey" required>
+  First key to encrypt operations
+</ParamField>
+
+<ParamField path="otherEncryptionKey" type="TPublicKey">
+  Optional second key to encrypt operations
+</ParamField>
+
+<ResponseField name="this & IEncryptingTransaction<this>" type="IEncryptingTransaction">
+  Returns the transaction with encryption capabilities
+</ResponseField>
+
+#### Supported encrypted fields
+
+- `body` in comment operation
+- `json` in custom_json operation
+- `memo` in transfer operation
+- `memo` in transfer_to_savings operation
+- `memo` in transfer_from_savings operation
+- `memo` in recurrent_transfer operation
+
+#### Usage example
+
+```typescript
+const tx = await chain.createTransaction();
+
+tx.startEncrypt(myPublicKey)
+  .pushOperation({
+    transfer: {
+      from: "alice",
+      to: "bob",
+      amount: chain.hiveCoins(10),
+      memo: "This will be encrypted"
+    }
+  })
+  .stopEncrypt();
+
+// Sign with encryption provider
+const signature = await encryptionProvider.signTransaction(tx);
+tx.addSignature(signature);
+```
+
+### stopEncrypt
+
+Stops the encryption chain.
+
+```typescript
+stopEncrypt(): this;
+```
+
+<ResponseField name="this" type="ITransaction">
+  Returns the transaction instance
+</ResponseField>
+
+**Note:** This call is optional if you're not pushing any more unencrypted operations.
+
+### decrypt
+
+Decrypts all underlying encrypted operations.
+
+```typescript
+decrypt(wallet: ISignatureProvider): transaction;
+```
+
+<ParamField path="wallet" type="ISignatureProvider" required>
+  Unlocked wallet with decryption keys
+</ParamField>
+
+<ResponseField name="transaction" type="transaction">
+  Protobuf transaction object with decrypted operations
+</ResponseField>
+
+## TypeScript types
+
+### transaction (protobuf)
+
+```typescript
+interface transaction {
+  ref_block_num: number;
+  ref_block_prefix: number;
+  expiration: string;
+  operations: Array<operation>;
+  extensions: Array<any>;
+  signatures: Array<string>;
+}
+```
+
+### ApiTransaction
+
+```typescript
+interface ApiTransaction {
+  ref_block_num: number;
+  ref_block_prefix: number;
+  expiration: string;
+  operations: Array<ApiOperation>;
+  extensions: object[];
+  signatures: string[];
+}
+
+interface ApiOperation {
+  type: string;
+  value: Record<string, any>;
+}
+```
+
+### TTransactionRequiredAuthorities
+
+```typescript
+type TTransactionRequiredAuthorities = {
+  posting: Set<string>;
+  active: Set<string>;
+  owner: Set<string>;
+  other: Array<authority>;
+};
+```
+
+## Complete example
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+import { BlogPostOperation } from '@hiveio/wax';
+import { createBeekeeperSigner } from '@hiveio/wax-signers-beekeeper';
+
+// Initialize
+const chain = await createHiveChain();
+const signer = await createBeekeeperSigner({ /* config */ });
+
+// Create transaction
+const tx = await chain.createTransaction("+5m");
+
+// Add blog post
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  category: "hive-174695",
+  title: "My First Post",
+  body: "Hello Hive!",
+  permlink: "my-first-post",
+  tags: ["introduction", "blog"],
+  description: "My introduction to Hive"
+}));
+
+// Validate
+tx.validate();
+
+// Check required authorities
+console.log('Required authorities:', tx.requiredAuthorities);
+
+// Sign
+const signature = await signer.signTransaction(tx.sigDigest);
+tx.addSignature(signature);
+
+// Verify signed
+console.log('Is signed:', tx.isSigned());
+console.log('Transaction ID:', tx.id);
+
+// Broadcast
+try {
+  await chain.api.network_broadcast_api.broadcast_transaction({
+    trx: tx.toApiJson()
+  });
+  console.log('Transaction broadcasted successfully!');
+} catch (error) {
+  console.error('Broadcast failed:', error);
+}
+```
+
+## See also
+
+- [createWaxFoundation](/api/typescript/wax-factory#createwaxfoundation) - Create offline instance
+- [createHiveChain](/api/typescript/wax-factory#createhivechain) - Create online instance
+- [Operations](/api/typescript/operations) - Operation types and builders
+- [Complex Operations](/guides/complex-operations) - High-level operation builders

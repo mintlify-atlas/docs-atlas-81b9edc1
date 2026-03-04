@@ -1,0 +1,447 @@
+---
+title: "Building transactions"
+description: "Step-by-step guide to building transactions with WAX"
+---
+
+Transactions are the fundamental way to interact with the Hive blockchain. This guide walks you through creating transactions from basic operations to complex multi-operation workflows.
+
+## Creating a transaction
+
+Before you can build a transaction, you need to initialize a WAX instance. Use `createWaxFoundation()` for offline operations or `createHiveChain()` for online operations.
+
+<Steps>
+  <Step title="Initialize WAX">
+    Choose between offline (foundation) and online (chain) modes based on your needs.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        import { createWaxFoundation, createHiveChain } from '@hiveio/wax';
+
+        // For offline operations (transaction building, signing)
+        const wax = await createWaxFoundation();
+
+        // For online operations (API calls, broadcasting)
+        const chain = await createHiveChain({
+          endpoint_url: 'https://api.hive.blog'
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from wax import create_wax_foundation, create_hive_chain
+
+        # For offline operations (transaction building, signing)
+        wax = create_wax_foundation()
+
+        # For online operations (API calls, broadcasting)
+        chain = create_hive_chain(
+            endpoint_url='https://api.hive.blog'
+        )
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+      Online mode automatically fetches chain configuration and head block data, making it easier to build transactions that will be broadcast.
+    </Note>
+  </Step>
+
+  <Step title="Create a transaction">
+    Create a transaction with TAPOS (Transaction as Proof of Stake) data. For online mode, this is handled automatically.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        // With online chain instance (recommended)
+        const tx = await chain.createTransaction();
+
+        // With offline foundation (requires TAPOS block ID)
+        const blockId = '8e78947614be92e77f7db82237e523bdbd7a907b';
+        const tx = wax.createTransaction({ taposBlockId: blockId });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        # With online chain instance (recommended)
+        tx = await chain.create_transaction()
+
+        # With offline foundation (requires TAPOS block ID)
+        block_id = '8e78947614be92e77f7db82237e523bdbd7a907b'
+        tx = wax.create_transaction(tapos_block_id=block_id)
+        ```
+      </Tab>
+    </Tabs>
+
+    <Info>
+      TAPOS (Transaction as Proof of Stake) references a recent block to prove the transaction was created for a specific chain, preventing replay attacks.
+    </Info>
+  </Step>
+
+  <Step title="Add operations">
+    Push one or more operations to your transaction. Operations represent actions on the blockchain.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        import { transfer } from '@hiveio/wax';
+
+        // Add a simple vote operation
+        tx.pushOperation({
+          vote_operation: {
+            voter: "alice",
+            author: "bob",
+            permlink: "example-post",
+            weight: 10000 // 100% upvote
+          }
+        });
+
+        // Add a transfer operation
+        tx.pushOperation({
+          transfer_operation: {
+            from_account: "alice",
+            to_account: "bob",
+            amount: chain.hive.satoshis(1), // 1 HIVE
+            memo: "Thanks for the post!"
+          }
+        });
+
+        // Chain multiple operations
+        tx.pushOperation({
+          vote_operation: {
+            voter: "alice",
+            author: "carol",
+            permlink: "another-post",
+            weight: 5000 // 50% upvote
+          }
+        }).pushOperation({
+          comment_operation: {
+            parent_author: "carol",
+            parent_permlink: "another-post",
+            author: "alice",
+            permlink: "re-carol-another-post",
+            title: "",
+            body: "Great post!",
+            json_metadata: "{}"
+          }
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from wax.proto.operations import vote, transfer, comment
+
+        # Add a simple vote operation
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="example-post",
+                weight=10000  # 100% upvote
+            )
+        )
+
+        # Add a transfer operation
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=chain.hive.satoshis(1),  # 1 HIVE
+                memo="Thanks for the post!"
+            )
+        )
+
+        # Chain multiple operations
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="carol",
+                permlink="another-post",
+                weight=5000  # 50% upvote
+            )
+        ).push_operation(
+            comment(
+                parent_author="carol",
+                parent_permlink="another-post",
+                author="alice",
+                permlink="re-carol-another-post",
+                title="",
+                body="Great post!",
+                json_metadata="{}"
+            )
+        )
+        ```
+      </Tab>
+    </Tabs>
+
+    <Tip>
+      You can add multiple operations to a single transaction. They will be executed in order.
+    </Tip>
+  </Step>
+
+  <Step title="Set expiration time (optional)">
+    By default, transactions expire after 1 minute. You can customize this when creating the transaction.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        // Set custom expiration (5 minutes from now)
+        const tx = await chain.createTransaction({
+          expirationTime: "+5m"
+        });
+
+        // Or use a specific timestamp
+        const tx = wax.createTransaction({
+          taposBlockId: blockId,
+          expirationTime: "+1h"
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from datetime import timedelta
+
+        # Set custom expiration (5 minutes from now)
+        tx = await chain.create_transaction(
+            expiration_time=timedelta(minutes=5)
+        )
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Validate the transaction">
+    Before signing, validate that your transaction is well-formed.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        try {
+          tx.validate();
+          console.log('Transaction is valid!');
+        } catch (error) {
+          console.error('Transaction validation failed:', error);
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        try:
+            tx.validate()
+            print('Transaction is valid!')
+        except Exception as error:
+            print(f'Transaction validation failed: {error}')
+        ```
+      </Tab>
+    </Tabs>
+
+    <Warning>
+      Always validate transactions before signing to catch errors early.
+    </Warning>
+  </Step>
+</Steps>
+
+## Transaction properties
+
+Once you've built a transaction, you can access various properties:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Get the transaction object
+    const protoTx = tx.transaction;
+
+    // Get transaction ID (after signing)
+    const txId = tx.id;
+
+    // Get signature digest for signing
+    const sigDigest = tx.sigDigest;
+
+    // Get impacted accounts
+    const accounts = tx.impactedAccounts;
+
+    // Get required authorities
+    const authorities = tx.requiredAuthorities;
+    console.log('Posting:', authorities.posting);
+    console.log('Active:', authorities.active);
+    console.log('Owner:', authorities.owner);
+
+    // Check if signed
+    const signed = tx.isSigned();
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Get the transaction object
+    proto_tx = tx.transaction
+
+    # Get transaction ID (after signing)
+    tx_id = tx.id
+
+    # Get signature digest for signing
+    sig_digest = tx.sig_digest
+
+    # Get impacted accounts
+    accounts = tx.impacted_accounts
+
+    # Get required authorities
+    authorities = tx.required_authorities
+    print(f'Posting: {authorities.posting_accounts}')
+    print(f'Active: {authorities.active_accounts}')
+    print(f'Owner: {authorities.owner_accounts}')
+
+    # Check if signed
+    signed = tx.is_signed
+    ```
+  </Tab>
+</Tabs>
+
+## Converting transaction formats
+
+WAX supports multiple transaction formats for interoperability:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Convert to API JSON format
+    const apiJson = tx.toApiJson();
+
+    // Convert to legacy API format
+    const legacyJson = tx.toLegacyApi();
+
+    // Convert to binary
+    const binary = tx.toBinaryForm();
+
+    // Convert to string
+    const jsonString = tx.toString();
+
+    // Create from API JSON
+    const newTx = Transaction.fromApi(wax, apiJsonString);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Convert to API JSON format
+    api_json = tx.to_api_json()
+
+    # Convert to legacy API format
+    legacy_json = tx.to_legacy_api()
+
+    # Convert to binary
+    binary = tx.to_binary_form()
+
+    # Convert to string
+    json_string = tx.to_string()
+
+    # Create from API JSON
+    new_tx = Transaction.from_api(wax, api_json_string)
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+Here's a complete example of building a transaction with multiple operations:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+
+    async function buildTransaction() {
+      // Initialize chain connection
+      const chain = await createHiveChain();
+
+      // Create transaction
+      const tx = await chain.createTransaction();
+
+      // Add multiple operations
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      }).pushOperation({
+        transfer_operation: {
+          from_account: "alice",
+          to_account: "bob",
+          amount: chain.hive.satoshis(1),
+          memo: "Thanks!"
+        }
+      });
+
+      // Validate before signing
+      tx.validate();
+
+      console.log('Transaction ID:', tx.id);
+      console.log('Operations:', tx.transaction.operations.length);
+      console.log('Impacted accounts:', Array.from(tx.impactedAccounts));
+
+      return tx;
+    }
+
+    buildTransaction().catch(console.error);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.proto.operations import vote, transfer
+
+    async def build_transaction():
+        # Initialize chain connection
+        chain = create_hive_chain()
+
+        # Create transaction
+        tx = await chain.create_transaction()
+
+        # Add multiple operations
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="example-post",
+                weight=10000
+            )
+        ).push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=chain.hive.satoshis(1),
+                memo="Thanks!"
+            )
+        )
+
+        # Validate before signing
+        tx.validate()
+
+        print(f'Transaction ID: {tx.id}')
+        print(f'Operations: {len(tx.transaction.operations)}')
+        print(f'Impacted accounts: {tx.impacted_accounts}')
+
+        return tx
+
+    asyncio.run(build_transaction())
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Signing transactions" icon="signature" href="/guides/signing-transactions">
+    Learn how to sign transactions with different providers
+  </Card>
+  <Card title="Broadcasting transactions" icon="tower-broadcast" href="/guides/broadcasting">
+    Send your signed transactions to the network
+  </Card>
+  <Card title="Complex operations" icon="puzzle-piece" href="/guides/complex-operations">
+    Use high-level operations for advanced workflows
+  </Card>
+  <Card title="Transaction API" icon="code" href="/api/typescript/transaction">
+    Explore the full transaction API reference
+  </Card>
+</CardGroup>

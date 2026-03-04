@@ -1,0 +1,451 @@
+---
+title: Database API
+description: Query account, witness, and blockchain state information using the Database API
+---
+
+The Database API provides read-only access to blockchain state including accounts, witnesses, and global properties. Use these endpoints to query information without modifying the blockchain.
+
+## find_accounts
+
+Find detailed information about one or more accounts.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.database_api.find_accounts({
+  accounts: ["alice", "bob"],
+  delayed_votes_active: true
+});
+
+console.log(result.accounts);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.database_api.find_accounts(
+    accounts=["alice", "bob"],
+    delayed_votes_active=True
+)
+
+print(result.accounts)
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="accounts" type="string[]" required>
+  Array of account names to retrieve
+</ParamField>
+
+<ParamField path="delayed_votes_active" type="boolean">
+  Whether to include delayed votes information
+</ParamField>
+
+### Response
+
+<ResponseField name="accounts" type="ApiAccount[]">
+  Array of account objects
+
+  <Expandable title="ApiAccount properties">
+    <ResponseField name="id" type="number">
+      Account ID
+    </ResponseField>
+
+    <ResponseField name="name" type="string">
+      Account name
+    </ResponseField>
+
+    <ResponseField name="owner" type="ApiAuthority">
+      Owner authority with weight threshold and key/account auths
+    </ResponseField>
+
+    <ResponseField name="active" type="ApiAuthority">
+      Active authority with weight threshold and key/account auths
+    </ResponseField>
+
+    <ResponseField name="posting" type="ApiAuthority">
+      Posting authority with weight threshold and key/account auths
+    </ResponseField>
+
+    <ResponseField name="memo_key" type="string">
+      Public key for memo encryption
+    </ResponseField>
+
+    <ResponseField name="json_metadata" type="string">
+      JSON metadata string
+    </ResponseField>
+
+    <ResponseField name="posting_json_metadata" type="string">
+      Posting JSON metadata string
+    </ResponseField>
+
+    <ResponseField name="created" type="string">
+      Account creation timestamp
+    </ResponseField>
+
+    <ResponseField name="balance" type="NaiAsset">
+      HIVE balance with amount, precision, and nai
+    </ResponseField>
+
+    <ResponseField name="hbd_balance" type="NaiAsset">
+      HBD balance with amount, precision, and nai
+    </ResponseField>
+
+    <ResponseField name="vesting_shares" type="NaiAsset">
+      Vesting shares (VESTS) with amount, precision, and nai
+    </ResponseField>
+
+    <ResponseField name="voting_manabar" type="ApiManabar">
+      Voting mana information with current_mana and last_update_time
+    </ResponseField>
+
+    <ResponseField name="downvote_manabar" type="ApiManabar">
+      Downvote mana information with current_mana and last_update_time
+    </ResponseField>
+
+    <ResponseField name="recovery_account" type="string">
+      Account that can recover this account
+    </ResponseField>
+
+    <ResponseField name="last_vote_time" type="string">
+      Timestamp of last vote
+    </ResponseField>
+
+    <ResponseField name="post_count" type="number">
+      Number of posts created
+    </ResponseField>
+
+    <ResponseField name="can_vote" type="boolean">
+      Whether account can vote
+    </ResponseField>
+
+    <ResponseField name="witnesses_voted_for" type="number">
+      Number of witnesses voted for
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "accounts": [
+    {
+      "id": 1234,
+      "name": "alice",
+      "balance": {
+        "amount": "1000000",
+        "precision": 3,
+        "nai": "@@000000021"
+      },
+      "hbd_balance": {
+        "amount": "50000",
+        "precision": 3,
+        "nai": "@@000000013"
+      },
+      "vesting_shares": {
+        "amount": "5000000000",
+        "precision": 6,
+        "nai": "@@000000037"
+      },
+      "voting_manabar": {
+        "current_mana": "4500000000",
+        "last_update_time": 1709510400
+      },
+      "can_vote": true,
+      "post_count": 42
+    }
+  ]
+}
+```
+</RequestExample>
+
+## get_dynamic_global_properties
+
+Get current global blockchain properties including block height, supply, and witness information.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const dgpo = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log(`Head block: ${dgpo.head_block_number}`);
+console.log(`Current witness: ${dgpo.current_witness}`);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+dgpo = await chain.api.database_api.get_dynamic_global_properties()
+
+print(f"Head block: {dgpo.head_block_number}")
+print(f"Current witness: {dgpo.current_witness}")
+```
+</CodeGroup>
+
+### Parameters
+
+This endpoint takes no parameters.
+
+### Response
+
+<ResponseField name="head_block_number" type="number">
+  Current head block number
+</ResponseField>
+
+<ResponseField name="head_block_id" type="string">
+  Current head block ID
+</ResponseField>
+
+<ResponseField name="time" type="string">
+  Current blockchain time
+</ResponseField>
+
+<ResponseField name="current_witness" type="string">
+  Name of current block producer
+</ResponseField>
+
+<ResponseField name="total_pow" type="string | number">
+  Total proof of work
+</ResponseField>
+
+<ResponseField name="virtual_supply" type="NaiAsset">
+  Virtual HIVE supply
+</ResponseField>
+
+<ResponseField name="current_supply" type="NaiAsset">
+  Current HIVE supply
+</ResponseField>
+
+<ResponseField name="current_hbd_supply" type="NaiAsset">
+  Current HBD supply
+</ResponseField>
+
+<ResponseField name="total_vesting_fund_hive" type="NaiAsset">
+  Total HIVE in vesting fund
+</ResponseField>
+
+<ResponseField name="total_vesting_shares" type="NaiAsset">
+  Total vesting shares (VESTS)
+</ResponseField>
+
+<ResponseField name="hbd_interest_rate" type="number">
+  Current HBD interest rate in basis points
+</ResponseField>
+
+<ResponseField name="hbd_print_rate" type="number">
+  Current HBD print rate
+</ResponseField>
+
+<ResponseField name="maximum_block_size" type="number">
+  Maximum block size in bytes
+</ResponseField>
+
+<ResponseField name="last_irreversible_block_num" type="number">
+  Last irreversible block number
+</ResponseField>
+
+<ResponseField name="participation_count" type="number">
+  Witness participation count
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "head_block_number": 80000000,
+  "head_block_id": "04c1c7a566fc0da66aee465714acee7346b48ac2",
+  "time": "2026-03-04T12:00:00",
+  "current_witness": "blocktrades",
+  "total_pow": "514415",
+  "virtual_supply": {
+    "amount": "400000000000",
+    "precision": 3,
+    "nai": "@@000000021"
+  },
+  "current_supply": {
+    "amount": "380000000000",
+    "precision": 3,
+    "nai": "@@000000021"
+  },
+  "hbd_interest_rate": 2000,
+  "maximum_block_size": 65536,
+  "last_irreversible_block_num": 79999970
+}
+```
+</RequestExample>
+
+## find_witnesses
+
+Find information about one or more witnesses.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.database_api.find_witnesses({
+  owners: ["blocktrades", "good-karma"],
+  delayed_votes_active: false
+});
+
+console.log(result.witnesses);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.database_api.find_witnesses(
+    owners=["blocktrades", "good-karma"],
+    delayed_votes_active=False
+)
+
+print(result.witnesses)
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="owners" type="string[]" required>
+  Array of witness account names
+</ParamField>
+
+<ParamField path="delayed_votes_active" type="boolean" required>
+  Whether to include delayed votes information
+</ParamField>
+
+### Response
+
+<ResponseField name="witnesses" type="ApiWitness[]">
+  Array of witness objects with signing key, properties, and voting information
+</ResponseField>
+
+## get_witness_schedule
+
+Get the current witness schedule and median properties.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const schedule = await chain.api.database_api.get_witness_schedule({});
+
+console.log(`Current witnesses: ${schedule.current_shuffled_witnesses}`);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+schedule = await chain.api.database_api.get_witness_schedule()
+
+print(f"Current witnesses: {schedule.current_shuffled_witnesses}")
+```
+</CodeGroup>
+
+### Parameters
+
+This endpoint takes no parameters.
+
+### Response
+
+<ResponseField name="current_shuffled_witnesses" type="string[]">
+  Array of current witness account names in shuffled order
+</ResponseField>
+
+<ResponseField name="num_scheduled_witnesses" type="number">
+  Number of scheduled witnesses
+</ResponseField>
+
+<ResponseField name="median_props" type="object">
+  Median witness properties
+  
+  <Expandable title="Median properties">
+    <ResponseField name="account_creation_fee" type="NaiAsset">
+      Median account creation fee
+    </ResponseField>
+
+    <ResponseField name="maximum_block_size" type="number">
+      Median maximum block size
+    </ResponseField>
+
+    <ResponseField name="hbd_interest_rate" type="number">
+      Median HBD interest rate
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="majority_version" type="string">
+  Majority hardfork version
+</ResponseField>
+
+## verify_authority
+
+Verify that a transaction has the required authority signatures.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.database_api.verify_authority({
+  trx: signedTransaction,
+  pack: "hf26"
+});
+
+console.log(`Valid: ${result.valid}`);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.database_api.verify_authority(
+    trx=signed_transaction,
+    pack="hf26"
+)
+
+print(f"Valid: {result.valid}")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="trx" type="ApiTransaction" required>
+  The transaction to verify
+</ParamField>
+
+<ParamField path="pack" type="TTransactionPackType" required>
+  Transaction pack type (e.g., "hf26")
+</ParamField>
+
+### Response
+
+<ResponseField name="valid" type="boolean">
+  Whether the transaction has valid authority
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "valid": true
+}
+```
+</RequestExample>

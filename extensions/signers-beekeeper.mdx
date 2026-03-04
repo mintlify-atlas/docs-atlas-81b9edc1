@@ -1,0 +1,191 @@
+---
+title: "Beekeeper signer"
+description: "Integrate Beekeeper in-browser wallet for secure transaction signing"
+---
+
+The Beekeeper signer provides integration with the Beekeeper in-browser wallet, enabling secure key management and transaction signing within your web application.
+
+## Overview
+
+Beekeeper is a lightweight, in-browser wallet that stores encrypted keys locally. It provides session-based key management, allowing users to sign transactions without exposing private keys to your application.
+
+## Installation
+
+Install the Beekeeper signer package:
+
+```bash
+npm install @hiveio/wax-signers-beekeeper
+```
+
+<Note>
+You must also install `@hiveio/beekeeper` separately, as it is a peer dependency.
+</Note>
+
+```bash
+npm install @hiveio/beekeeper
+```
+
+## Basic usage
+
+Here's how to use the Beekeeper signer with WAX:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import BeekeeperProvider from "@hiveio/wax-signers-beekeeper";
+import beekeeperFactory from "@hiveio/beekeeper";
+
+// Initialize Beekeeper
+const bk = await beekeeperFactory();
+const chain = await createHiveChain();
+
+// Create a session and wallet
+const session = bk.createSession("salt");
+const { wallet } = await session.createWallet("w0");
+const publicKey = await wallet.importKey("5JkFnXrLM2ap9t3AmAxBJvQHF7xSKtnTrCTginQCkhzU5S7ecPT");
+
+// Create the signer provider
+const provider = BeekeeperProvider.for(wallet, "myaccount", "active", chain);
+
+// Create and sign transaction
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "myaccount",
+    author: "author",
+    permlink: "post-permlink",
+    weight: 10000
+  }
+});
+
+// Sign with Beekeeper
+await provider.signTransaction(tx);
+
+// Broadcast the transaction
+await chain.broadcast(tx);
+```
+
+## Session management
+
+Beekeeper uses sessions to manage keys securely:
+
+```typescript
+import beekeeperFactory from "@hiveio/beekeeper";
+
+const bk = await beekeeperFactory();
+
+// Create a new session with a unique salt
+const session = bk.createSession("unique-session-salt");
+
+// Create or open a wallet
+const { wallet } = await session.createWallet("my-wallet");
+
+// Import keys
+const postingKey = await wallet.importKey("5J...");
+const activeKey = await wallet.importKey("5K...");
+
+// List all public keys in the wallet
+const keys = await wallet.getPublicKeys();
+```
+
+## Signing transactions
+
+The Beekeeper provider handles transaction signing:
+
+```typescript
+const provider = BeekeeperProvider.for(wallet, "username", "active", chain);
+
+// The provider automatically signs with the appropriate key
+await provider.signTransaction(tx);
+
+// You can also manually specify a public key
+await provider.signTransaction(tx, publicKey);
+```
+
+## Key features
+
+<CardGroup cols={2}>
+
+<Card title="In-browser storage" icon="browser">
+  Keys are encrypted and stored locally in the browser.
+</Card>
+
+<Card title="Session-based" icon="clock">
+  Temporary sessions that expire, enhancing security.
+</Card>
+
+<Card title="Multiple wallets" icon="wallet">
+  Support for multiple wallets within a single session.
+</Card>
+
+<Card title="Key management" icon="key">
+  Import, export, and manage multiple private keys.
+</Card>
+
+</CardGroup>
+
+## Security considerations
+
+<Warning>
+Beekeeper stores encrypted keys in browser storage. While secure, users should:
+- Use strong session salts
+- Close sessions when done
+- Avoid using Beekeeper on shared computers
+</Warning>
+
+## Example: Complete workflow
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import BeekeeperProvider from "@hiveio/wax-signers-beekeeper";
+import beekeeperFactory from "@hiveio/beekeeper";
+
+async function voteWithBeekeeper() {
+  // Initialize
+  const bk = await beekeeperFactory();
+  const chain = await createHiveChain();
+  
+  // Setup wallet
+  const session = bk.createSession("my-salt-" + Date.now());
+  const { wallet } = await session.createWallet("voting-wallet");
+  const publicKey = await wallet.importKey(process.env.POSTING_KEY!);
+  
+  // Create provider
+  const provider = BeekeeperProvider.for(
+    wallet,
+    "voter-account",
+    "posting",
+    chain
+  );
+  
+  // Build transaction
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    vote: {
+      voter: "voter-account",
+      author: "author-account",
+      permlink: "great-post",
+      weight: 10000
+    }
+  });
+  
+  // Sign and broadcast
+  await provider.signTransaction(tx);
+  const result = await chain.broadcast(tx);
+  
+  console.log("Transaction ID:", result.id);
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Transactions" icon="file-signature" href="/guides/building-transactions">
+  Learn more about building transactions.
+</Card>
+
+<Card title="Signing guide" icon="pen" href="/guides/signing-transactions">
+  Explore advanced signing techniques.
+</Card>
+
+</CardGroup>

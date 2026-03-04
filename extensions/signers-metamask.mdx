@@ -1,0 +1,248 @@
+---
+title: "MetaMask signer"
+description: "Integrate MetaMask Hive Snap for transaction signing"
+---
+
+The MetaMask signer enables integration with the Hive Wallet Snap for MetaMask, bringing Hive blockchain support to the popular Ethereum wallet. This allows MetaMask users to interact with Hive applications without installing additional browser extensions.
+
+## Overview
+
+The Hive Wallet is a MetaMask Snap that extends MetaMask's functionality to support Hive blockchain operations. This integration is particularly useful for:
+
+- Users already familiar with MetaMask
+- Cross-chain applications spanning Ethereum and Hive
+- Reducing the number of browser extensions users need
+
+<Info>
+MetaMask Snaps are third-party extensions that expand MetaMask's capabilities beyond Ethereum. Learn more about [MetaMask Snaps](https://metamask.io/snaps/).
+</Info>
+
+## Prerequisites
+
+Your users must have:
+
+- MetaMask Flask (development version) or MetaMask with Snaps support
+- The Hive Wallet Snap installed
+
+Follow the [setup tutorial](https://youtu.be/zKT1GXO6G-0) to configure MetaMask for Hive.
+
+## Installation
+
+Install the MetaMask signer package:
+
+```bash
+npm install @hiveio/wax-signers-metamask
+```
+
+## Basic usage
+
+Here's how to use the MetaMask signer with WAX:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import MetaMaskProvider from "@hiveio/wax-signers-metamask";
+
+const chain = await createHiveChain();
+
+// Create the MetaMask provider
+// The parameter (0) is the account index
+const provider = MetaMaskProvider.for(0);
+
+// Create transaction
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Sign with MetaMask (opens MetaMask popup)
+await provider.signTransaction(tx);
+
+// Broadcast the transaction
+await chain.broadcast(tx);
+```
+
+## Account indexes
+
+The MetaMask Snap supports multiple Hive accounts through indexes:
+
+```typescript
+// First account (index 0)
+const provider0 = MetaMaskProvider.for(0);
+
+// Second account (index 1)
+const provider1 = MetaMaskProvider.for(1);
+
+// Third account (index 2)
+const provider2 = MetaMaskProvider.for(2);
+```
+
+Each index represents a different Hive account derived from the same MetaMask seed phrase.
+
+## User experience
+
+When signing a transaction:
+
+1. MetaMask popup appears showing transaction details
+2. User reviews the Hive operation(s)
+3. User confirms or rejects in MetaMask
+4. Signed transaction returns to your application
+
+<Tip>
+The MetaMask UI provides a familiar experience for users who already use MetaMask for Ethereum.
+</Tip>
+
+## Example: Voting on content
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import MetaMaskProvider from "@hiveio/wax-signers-metamask";
+
+async function upvotePost(
+  accountIndex: number,
+  author: string,
+  permlink: string,
+  weight: number = 10000
+) {
+  const chain = await createHiveChain();
+  const provider = MetaMaskProvider.for(accountIndex);
+  
+  // Get the account name for this index from MetaMask
+  // (Implementation depends on your Snap version)
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    vote: {
+      voter: "voter-account", // Retrieved from Snap
+      author,
+      permlink,
+      weight
+    }
+  });
+  
+  // MetaMask popup appears
+  await provider.signTransaction(tx);
+  
+  const result = await chain.broadcast(tx);
+  console.log("Vote successful!", result.id);
+}
+
+// Usage
+await upvotePost(0, "author", "great-post", 10000);
+```
+
+## Example: Transfer HIVE
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import MetaMaskProvider from "@hiveio/wax-signers-metamask";
+
+async function sendHive(
+  accountIndex: number,
+  from: string,
+  to: string,
+  amount: string,
+  memo: string = ""
+) {
+  const chain = await createHiveChain();
+  const provider = MetaMaskProvider.for(accountIndex);
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    transfer: {
+      from,
+      to,
+      amount: chain.hiveCoins(amount),
+      memo
+    }
+  });
+  
+  await provider.signTransaction(tx);
+  return await chain.broadcast(tx);
+}
+
+// Send 5 HIVE
+await sendHive(0, "alice", "bob", "5.000", "Coffee money");
+```
+
+## Detecting MetaMask and the Snap
+
+```typescript
+async function checkMetaMaskSnap(): Promise<boolean> {
+  if (typeof window.ethereum === 'undefined') {
+    console.error("MetaMask not installed");
+    return false;
+  }
+  
+  try {
+    // Check if Hive Snap is installed
+    const snaps = await window.ethereum.request({
+      method: 'wallet_getSnaps'
+    });
+    
+    const hiveSnapId = 'npm:@hiveio/hive-wallet-snap';
+    return hiveSnapId in snaps;
+  } catch (error) {
+    console.error("Error checking Snap:", error);
+    return false;
+  }
+}
+
+if (!await checkMetaMaskSnap()) {
+  // Prompt user to install the Hive Wallet Snap
+}
+```
+
+## Knowledge base
+
+For detailed information about the Hive Wallet Snap, including advanced features and troubleshooting, see the [Knowledge Base](https://github.com/openhive-network/metamask-snap/wiki/KB#on-chain-usage).
+
+## Key features
+
+<CardGroup cols={2}>
+
+<Card title="Familiar interface" icon="ethereum">
+  Leverages MetaMask's trusted user experience.
+</Card>
+
+<Card title="Cross-chain" icon="bridge">
+  One wallet for both Ethereum and Hive.
+</Card>
+
+<Card title="HD wallet" icon="shuffle">
+  Hierarchical deterministic wallet with multiple accounts.
+</Card>
+
+<Card title="Snap ecosystem" icon="puzzle-piece">
+  Part of the growing MetaMask Snaps ecosystem.
+</Card>
+
+</CardGroup>
+
+## Limitations
+
+<Warning>
+The Hive Wallet Snap is currently in development. Consider these limitations:
+
+- Requires MetaMask Flask or Snaps-enabled MetaMask version
+- May have different UX compared to native Hive wallets
+- Feature set may be limited compared to dedicated Hive wallets
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Setup tutorial" icon="video" href="https://youtu.be/zKT1GXO6G-0">
+  Watch the MetaMask setup video guide.
+</Card>
+
+<Card title="Transactions" icon="file-signature" href="/guides/building-transactions">
+  Learn more about building transactions.
+</Card>
+
+</CardGroup>

@@ -1,0 +1,86 @@
+---
+title: "Extensions overview"
+description: "Explore the WAX SDK ecosystem of signers and API extensions"
+---
+
+The WAX SDK provides a rich ecosystem of extensions that enhance its core functionality. These extensions allow you to integrate with various wallets, signing providers, and API services to build powerful Hive blockchain applications.
+
+## Extension types
+
+### Signers
+
+Signer extensions enable transaction signing using different wallet providers. Each signer integrates with a specific wallet or service, allowing users to sign transactions securely without exposing their private keys to your application.
+
+<CardGroup cols={2}>
+
+<Card title="Beekeeper" icon="shield-halved" href="/extensions/signers-beekeeper">
+  In-browser wallet integration for secure key management and transaction signing.
+</Card>
+
+<Card title="Keychain" icon="key" href="/extensions/signers-keychain">
+  Browser extension wallet integration for easy Web3 authentication.
+</Card>
+
+<Card title="MetaMask" icon="wallet" href="/extensions/signers-metamask">
+  MetaMask Snap integration bringing Hive to the popular Ethereum wallet.
+</Card>
+
+<Card title="PeakVault" icon="vault" href="/extensions/signers-peakvault">
+  PeakD's secure wallet extension for Hive transactions.
+</Card>
+
+</CardGroup>
+
+### API definitions
+
+API definition packages provide typed interfaces for interacting with various Hive network services. These packages keep the core WAX library lightweight while allowing you to add only the API definitions you need.
+
+<Card title="API definitions" icon="code" href="/extensions/api-definitions">
+  Learn about available API packages and how to use them.
+</Card>
+
+## Why use extensions?
+
+Extensions provide several benefits:
+
+- **Modularity**: Install only what you need, keeping your bundle size small
+- **Type safety**: Full TypeScript support with autocompletion
+- **Security**: Users sign transactions with their preferred wallet
+- **Flexibility**: Easy to switch between different signing providers
+- **Maintainability**: Separate versioning and updates for each extension
+
+## Choosing a signer
+
+The right signer depends on your use case:
+
+- **Beekeeper**: Best for applications needing in-browser key storage with local session management
+- **Keychain**: Ideal for web applications targeting users who already have Keychain installed
+- **MetaMask**: Perfect for bridging Ethereum and Hive ecosystems
+- **PeakVault**: Great for PeakD users and applications in the Peak ecosystem
+
+## Using multiple signers
+
+You can support multiple signers in your application to give users flexibility:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import KeychainProvider from "@hiveio/wax-signers-keychain";
+import PeakVaultProvider from "@hiveio/wax-signers-peakvault";
+
+const chain = await createHiveChain();
+
+// Let users choose their preferred wallet
+const useKeychain = await detectKeychain();
+const provider = useKeychain 
+  ? KeychainProvider.for("myaccount", "active")
+  : PeakVaultProvider.for("myaccount", "active");
+
+const tx = await chain.createTransaction();
+tx.pushOperation(/* ... */);
+await provider.signTransaction(tx);
+await chain.broadcast(tx);
+```
+
+## Next steps
+
+Explore the individual signer documentation to learn how to integrate each wallet provider into your application.

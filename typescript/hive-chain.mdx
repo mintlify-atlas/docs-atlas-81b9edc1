@@ -1,0 +1,514 @@
+---
+title: Using createHiveChain
+description: Connect to the Hive network and interact with the blockchain using createHiveChain
+---
+
+The `createHiveChain()` function creates a WAX instance with full blockchain connectivity. You can query accounts, fetch blocks, broadcast transactions, and access all Hive APIs.
+
+## When to use createHiveChain
+
+Use `createHiveChain()` when you need:
+
+- **API access** - Query blockchain data (accounts, blocks, witnesses, etc.)
+- **Transaction broadcasting** - Send signed transactions to the network
+- **Automatic TaPoS** - Create transactions with automatic reference block handling
+- **Online validation** - Verify transactions against current chain state
+- **REST API calls** - Access high-performance REST endpoints
+
+For offline operations, use [`createWaxFoundation()`](/typescript/wax-foundation) instead.
+
+## Creating a chain instance
+
+Basic initialization:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+```
+
+With custom configuration:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain({
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000",
+  apiEndpoint: "https://api.hive.blog",
+  restApiEndpoint: "https://api.syncad.com",
+  apiTimeout: 5000, // 5 seconds
+  waxApiCaller: "my-app/1.0.0"
+});
+```
+
+## Interface reference
+
+The `IHiveChainInterface` extends `IWaxBaseInterface` with:
+
+```typescript
+interface IHiveChainInterface extends IWaxBaseInterface {
+  // API properties
+  readonly api: TDefaultJsonRpcApi;
+  readonly restApi: TDefaultRestApi;
+  readonly endpointUrl: string;
+
+  // Transaction methods
+  createTransaction(expirationTime?: string | Date | number): Promise<IOnlineTransaction>;
+  broadcast(transaction: ApiTransaction | ITransaction | IOnlineTransaction): Promise<void>;
+
+  // Configuration methods
+  extend<YourApi>(extendedHiveApiData?: YourApi): HiveChainApi & TWaxExtended<YourApi, this>;
+  extendRest<YourRestApi>(extendedHiveRestApiData?: TDeepWaxApiRequestPartial<YourRestApi>): HiveChainApi & TWaxRestExtended<YourRestApi, this>;
+  extendConfig(config: IWaxChainExtendibleOptions): this;
+  withProxy(requestInterceptor: TRequestInterceptor, responseInterceptor: TResponseInterceptor): HiveChainApi;
+
+  // Manabar methods
+  calculateAccountMana(account: ApiAccount, now: number, manabarType: EManabarType): IManabarData;
+}
+```
+
+## Creating transactions
+
+Create transactions with automatic TaPoS:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Creates transaction with current head block as reference
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+```
+
+With custom expiration:
+
+```typescript
+const tx = await chain.createTransaction("+30m"); // 30 minutes from now
+const tx = await chain.createTransaction("+2h");  // 2 hours from now
+const tx = await chain.createTransaction(new Date("2024-12-31T23:59:59Z"));
+```
+
+## Broadcasting transactions
+
+Send a signed transaction to the network:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+
+// Sign the transaction (using a signer package)
+// ... signing code ...
+
+// Broadcast to the network
+await chain.broadcast(tx);
+
+console.log("Transaction broadcasted!");
+```
+
+Broadcast with automatic validation:
+
+```typescript
+// The chain performs on-chain verification before broadcasting
+await chain.broadcast(tx);
+
+// This checks:
+// - Private key leakage prevention
+// - Authority definition validation
+// - Current chain state compatibility
+```
+
+## API access
+
+The `api` property provides access to all Hive JSON-RPC APIs:
+
+### database_api
+
+Query blockchain data:
+
+```typescript
+// Get account information
+const accounts = await chain.api.database_api.find_accounts({
+  accounts: ["alice", "bob"]
+});
+
+console.log(accounts.accounts[0].name);
+console.log(accounts.accounts[0].balance);
+
+// Get dynamic global properties
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log(`Head block: ${props.head_block_number}`);
+console.log(`Time: ${props.time}`);
+
+// Verify authority
+const result = await chain.api.database_api.verify_authority({
+  trx: tx.toApiJson()
+});
+
+console.log(`Valid: ${result.valid}`);
+```
+
+### block_api
+
+Fetch block data:
+
+```typescript
+// Get a single block
+const block = await chain.api.block_api.get_block({
+  block_num: 87654321
+});
+
+console.log(`Block ID: ${block.block.block_id}`);
+console.log(`Transactions: ${block.block.transactions.length}`);
+
+// Get block range
+const blocks = await chain.api.block_api.get_block_range({
+  starting_block_num: 87654320,
+  count: 10
+});
+
+for (const block of blocks.blocks) {
+  console.log(`Block ${block.block_id}`);
+}
+
+// Get block header
+const header = await chain.api.block_api.get_block_header({
+  block_num: 87654321
+});
+
+console.log(header.header);
+```
+
+### network_broadcast_api
+
+Broadcast transactions:
+
+```typescript
+// Broadcast a signed transaction
+await chain.api.network_broadcast_api.broadcast_transaction({
+  trx: tx.toApiJson(),
+  max_block_age: -1
+});
+```
+
+### rc_api
+
+Query resource credits:
+
+```typescript
+// Get RC accounts
+const rcAccounts = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+const rc = rcAccounts.rc_accounts[0];
+console.log(`Max RC: ${rc.max_rc}`);
+console.log(`Current RC: ${rc.rc_manabar.current_mana}`);
+```
+
+### account_by_key_api
+
+Find accounts by public key:
+
+```typescript
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: ["STM8ZSw..."]
+});
+
+console.log(`Accounts: ${result.accounts}`);
+```
+
+## REST API access
+
+The `restApi` property provides high-performance REST endpoints:
+
+```typescript
+// Example REST API usage
+const data = await chain.restApi.some_endpoint({
+  // Request parameters
+});
+```
+
+Configure endpoint URLs:
+
+```typescript
+// Change default REST API URL
+chain.restApi.endpointUrl = "https://my-api.example.com";
+
+// Change URL for specific endpoint
+chain.restApi.specific_endpoint.endpointUrl = "https://specialized-api.example.com";
+
+// Reset to default
+chain.restApi.specific_endpoint.endpointUrl = undefined;
+```
+
+## Extending APIs
+
+### Extend JSON-RPC API
+
+Add custom API methods:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const customApiSchema = {
+  my_custom_api: {
+    my_method: {
+      params: { account: String },
+      result: { data: String }
+    }
+  }
+};
+
+const chain = await createHiveChain();
+const extendedChain = chain.extend(customApiSchema);
+
+// Use custom method
+const result = await extendedChain.api.my_custom_api.my_method({
+  account: "alice"
+});
+
+console.log(result.data);
+```
+
+### Extend REST API
+
+Add custom REST endpoints:
+
+```typescript
+const customRestSchema = {
+  custom_rest: {
+    get_data: {
+      params: { id: Number },
+      result: { value: String },
+      method: "GET",
+      urlPath: "/custom/{id}"
+    }
+  }
+};
+
+const extendedChain = chain.extendRest(customRestSchema);
+
+const result = await extendedChain.restApi.custom_rest.get_data({
+  id: 123
+});
+
+console.log(result.value);
+```
+
+## Request/response interception
+
+Intercept API calls for logging or modification:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const chainWithProxy = chain.withProxy(
+  // Request interceptor
+  (requestData) => {
+    console.log("Request:", requestData.url, requestData.data);
+    return requestData;
+  },
+  // Response interceptor
+  (responseData, requestData) => {
+    console.log("Response:", responseData.response);
+    return responseData;
+  }
+);
+
+// All API calls through chainWithProxy will be intercepted
+const accounts = await chainWithProxy.api.database_api.find_accounts({
+  accounts: ["alice"]
+});
+```
+
+## Manabar calculations
+
+Calculate manabar values with live chain data:
+
+```typescript
+import { createHiveChain, EManabarType } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Get account data
+const accountData = await chain.api.database_api.find_accounts({
+  accounts: ["alice"]
+});
+
+const account = accountData.accounts[0];
+
+// Get current head block time
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+const now = new Date(props.time).getTime() / 1000;
+
+// Calculate upvote manabar
+const upvoteManabar = chain.calculateAccountMana(account, now, EManabarType.UPVOTE);
+console.log(`Upvote mana: ${upvoteManabar.percent}%`);
+
+// Calculate downvote manabar
+const downvoteManabar = chain.calculateAccountMana(account, now, EManabarType.DOWNVOTE);
+console.log(`Downvote mana: ${downvoteManabar.percent}%`);
+
+// Calculate RC manabar (requires rc_api call)
+const rcData = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+if (rcData.rc_accounts.length > 0) {
+  const rcAccount = rcData.rc_accounts[0];
+  const rcManabar = chain.calculateCurrentManabarValue(
+    now,
+    rcAccount.max_rc,
+    rcAccount.rc_manabar.current_mana,
+    rcAccount.rc_manabar.last_update_time
+  );
+  console.log(`RC mana: ${rcManabar.percent}%`);
+}
+```
+
+## Configuration management
+
+### Change endpoint URL
+
+Update the API endpoint at runtime:
+
+```typescript
+const chain = await createHiveChain({
+  apiEndpoint: "https://api.hive.blog"
+});
+
+// Change endpoint
+chain.endpointUrl = "https://api.deathwing.me";
+
+// All subsequent API calls use the new endpoint
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+```
+
+### Extend configuration
+
+Create a new instance with modified settings:
+
+```typescript
+const mainnetChain = await createHiveChain({
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000",
+  apiEndpoint: "https://api.hive.blog"
+});
+
+// Create testnet instance
+const testnetChain = mainnetChain.extendConfig({
+  chainId: "42000000000000000000000000000000000000000000000000000000000000",
+  apiEndpoint: "https://testnet.openhive.network"
+});
+
+console.log(mainnetChain.chainId); // Mainnet
+console.log(testnetChain.chainId); // Testnet
+```
+
+## Error handling
+
+Handle API errors gracefully:
+
+```typescript
+import { createHiveChain, WaxChainApiError } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+try {
+  const accounts = await chain.api.database_api.find_accounts({
+    accounts: ["nonexistent-account"]
+  });
+} catch (error) {
+  if (error instanceof WaxChainApiError) {
+    console.error("API Error:", error.message);
+    console.error("Request:", error.requestData);
+    console.error("Response:", error.responseData);
+  } else {
+    console.error("Unknown error:", error);
+  }
+}
+```
+
+## Complete example
+
+A full workflow using `createHiveChain()`:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+// Initialize chain
+const chain = await createHiveChain();
+
+console.log(`Connected to: ${chain.endpointUrl}`);
+console.log(`Chain ID: ${chain.chainId}`);
+
+// Query account
+const accountData = await chain.api.database_api.find_accounts({
+  accounts: ["alice"]
+});
+
+const account = accountData.accounts[0];
+console.log(`Account: ${account.name}`);
+console.log(`Balance: ${account.balance}`);
+
+// Get dynamic global properties
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+console.log(`Head block: ${props.head_block_number}`);
+
+// Create transaction
+const tx = await chain.createTransaction("+1h");
+
+tx.pushOperation({
+  transfer: {
+    from_account: "alice",
+    to_account: "bob",
+    amount: chain.hiveCoins(1),
+    memo: "Test transfer"
+  }
+});
+
+console.log(`Transaction ID: ${tx.id}`);
+console.log(`Signature digest: ${tx.sigDigest}`);
+
+// Validate transaction
+tx.validate();
+console.log("Transaction is valid");
+
+// Sign transaction (using a signer package)
+// ... signing code ...
+
+// Broadcast to network
+await chain.broadcast(tx);
+console.log("Transaction broadcasted successfully!");
+```
+
+## Next steps
+
+Explore more capabilities:
+
+- Build complex [transactions](/typescript/transactions)
+- Learn about [API calls](/typescript/api-calls) in detail
+- Integrate with [frameworks](/typescript/framework-integration)
+- Study [working examples](/typescript/examples)

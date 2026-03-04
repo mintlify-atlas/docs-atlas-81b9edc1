@@ -1,0 +1,143 @@
+---
+title: Introduction to WAX
+description: Discover WAX, the powerful SDK for building Hive blockchain applications in Python and TypeScript
+---
+
+WAX is a comprehensive SDK that provides Hive blockchain protocol features to both Python and TypeScript/JavaScript developers. It wraps the core C++ hived source code, giving you high-performance access to blockchain operations with the convenience of modern programming languages.
+
+## What is WAX?
+
+WAX (Web Assembly eXtension) is a library that enables you to:
+
+- Create and manipulate Hive blockchain transactions
+- Sign transactions using various wallet providers
+- Broadcast transactions to the Hive network
+- Interact with Hive APIs (JSON-RPC and REST)
+- Calculate manabar regeneration, HP, and other blockchain metrics
+- Validate operations and transactions
+
+Under the hood, WAX uses:
+- **Python**: Cython bindings compiled to native `.so` modules for maximum performance
+- **TypeScript**: WebAssembly (WASM) compiled from C++ via Emscripten
+
+This architecture ensures that both language implementations share the same battle-tested C++ core from the hived node software.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Dual language support" icon="code">
+    Build in Python or TypeScript with identical APIs and behavior across both platforms.
+  </Card>
+  <Card title="Type-safe operations" icon="shield-check">
+    Protocol buffer definitions ensure type safety and validation for all blockchain operations.
+  </Card>
+  <Card title="Flexible signing" icon="key">
+    Support for multiple signers including Beekeeper, Keychain, MetaMask, PeakVault, and more.
+  </Card>
+  <Card title="Extendable APIs" icon="plug">
+    Easily extend with custom API endpoints and REST API definitions to match your needs.
+  </Card>
+  <Card title="Framework compatible" icon="layer-group">
+    Works seamlessly with Next.js, React, Vue, Nuxt, Node.js, and other popular frameworks.
+  </Card>
+  <Card title="Production ready" icon="rocket">
+    Built on the same C++ core as Hive nodes, ensuring reliability and performance.
+  </Card>
+</CardGroup>
+
+## Why use WAX?
+
+### For Python developers
+
+WAX brings the power of Hive blockchain development to Python with:
+
+- Native performance through Cython bindings
+- Async/await support for modern Python applications
+- Full type hints and IDE autocomplete
+- Integration with popular Python tools like Poetry
+
+### For TypeScript developers
+
+WAX provides TypeScript developers with:
+
+- WebAssembly performance with JavaScript convenience
+- Full TypeScript definitions and intellisense
+- Automatic environment detection (web vs Node.js)
+- Support for modern bundlers (Webpack, Vite, Rollup, Parcel)
+- SSR compatibility for frameworks like Next.js and Nuxt
+
+### Shared benefits
+
+Both implementations offer:
+
+- **Consistent API**: Learn once, use in either language
+- **Protocol accuracy**: Direct use of official Hive protocol definitions
+- **Active development**: Regular updates to match Hive network changes
+- **Comprehensive testing**: Extensive test suites ensure reliability
+
+## Core concepts
+
+WAX is built around two main entry points:
+
+<CodeGroup>
+
+```python Python
+from wax import create_wax_foundation, create_hive_chain
+
+# Offline operations (transaction building, signing, validation)
+wax = create_wax_foundation()
+
+# Online operations (API calls, broadcasting)
+chain = create_hive_chain()
+```
+
+```typescript TypeScript
+import { createWaxFoundation, createHiveChain } from '@hiveio/wax';
+
+// Offline operations (transaction building, signing, validation)
+const wax = await createWaxFoundation();
+
+// Online operations (API calls, broadcasting)
+const chain = await createHiveChain();
+```
+
+</CodeGroup>
+
+### Wax Foundation
+
+The foundation provides offline operations:
+- Transaction creation and manipulation
+- Signature generation and verification
+- Protocol validation
+- Asset calculations (HIVE, HBD, VESTS)
+- Transaction ID and digest calculation
+
+### Hive Chain
+
+The chain interface adds online capabilities:
+- Automatic TaPoS (Transaction as Proof of Stake) data
+- API calls to Hive nodes
+- Transaction broadcasting
+- Manabar calculations from live account data
+
+## Use cases
+
+WAX is perfect for building:
+
+- **Social applications**: Create posts, comments, and votes on Hive
+- **Wallet applications**: Manage keys, sign transactions, transfer funds
+- **DeFi tools**: Swap tokens, provide liquidity, track balances
+- **Analytics dashboards**: Query blockchain data, calculate metrics
+- **Automation tools**: Curation bots, notification systems
+- **Gaming applications**: Integrate Hive-based games like Splinterlands
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install WAX for Python or TypeScript
+  </Card>
+  <Card title="Quick start" icon="bolt" href="/quickstart">
+    Build your first Hive transaction in minutes
+  </Card>
+</CardGroup>

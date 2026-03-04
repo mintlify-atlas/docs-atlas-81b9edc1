@@ -1,0 +1,701 @@
+---
+title: Complete working examples
+description: Full examples demonstrating WAX SDK capabilities across different use cases
+---
+
+Learn from complete, working examples that demonstrate real-world usage of the WAX SDK.
+
+## Basic operations
+
+### Vote on a post
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+// Initialize chain and wallet
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("my-salt");
+const { wallet } = await session.createWallet("my-wallet", "password");
+
+// Import posting key
+const postingKey = await wallet.importKey("5JWcdkhS...");
+
+// Create transaction
+const tx = await chain.createTransaction();
+
+// Add vote operation
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "my-awesome-post",
+    weight: 10000 // 100%
+  }
+});
+
+// Sign and broadcast
+const signature = await wallet.signDigest(tx.sigDigest, postingKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log(`Vote transaction ${tx.id} broadcasted!`);
+```
+
+### Transfer HIVE
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+
+// Import active key (required for transfers)
+const activeKey = await wallet.importKey("5JWcdkhS...");
+
+// Create transaction
+const tx = await chain.createTransaction();
+
+// Add transfer operation
+tx.pushOperation({
+  transfer: {
+    from_account: "alice",
+    to_account: "bob",
+    amount: chain.hiveCoins(10),
+    memo: "Thanks for the help!"
+  }
+});
+
+// Sign with active key
+const signature = await wallet.signDigest(tx.sigDigest, activeKey);
+tx.addSignature(signature);
+
+// Broadcast
+await chain.broadcast(tx);
+console.log("Transfer successful!");
+```
+
+### Query account information
+
+```typescript
+import { createHiveChain, EManabarType } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Get account data
+const accountData = await chain.api.database_api.find_accounts({
+  accounts: ["alice"],
+  delayed_votes_active: true
+});
+
+const account = accountData.accounts[0];
+
+// Get dynamic global properties for current time
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+const now = new Date(props.time).getTime() / 1000;
+
+// Display account information
+console.log(`Account: ${account.name}`);
+console.log(`Balance: ${account.balance}`);
+console.log(`HBD: ${account.hbd_balance}`);
+console.log(`VESTS: ${account.vesting_shares}`);
+
+// Calculate voting manabar
+const upvoteManabar = chain.calculateAccountMana(account, now, EManabarType.UPVOTE);
+console.log(`Upvote mana: ${upvoteManabar.percent.toFixed(2)}%`);
+
+const downvoteManabar = chain.calculateAccountMana(account, now, EManabarType.DOWNVOTE);
+console.log(`Downvote mana: ${downvoteManabar.percent.toFixed(2)}%`);
+
+// Get RC information
+const rcData = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+if (rcData.rc_accounts.length > 0) {
+  const rc = rcData.rc_accounts[0];
+  const rcManabar = chain.calculateCurrentManabarValue(
+    now,
+    rc.max_rc,
+    rc.rc_manabar.current_mana,
+    rc.rc_manabar.last_update_time
+  );
+  console.log(`RC mana: ${rcManabar.percent.toFixed(2)}%`);
+}
+```
+
+## Blog operations
+
+### Create a blog post
+
+```typescript
+import { createHiveChain, BlogPostOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const postingKey = await wallet.importKey("5JWcdkhS...");
+
+// Create transaction
+const tx = await chain.createTransaction();
+
+// Add blog post operation
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  permlink: "my-first-post-2024",
+  title: "My First Post on Hive",
+  body: "# Welcome\\n\\nThis is my first post on Hive blockchain!\\n\\nI'm excited to join this community.",
+  category: "hive-174695", // Community ID or main tag
+  tags: ["introduceyourself", "firstpost", "blog"],
+  description: "My introduction to the Hive community",
+  format: "markdown",
+  beneficiaries: [
+    { account: "bob", weight: 500 } // 5% to bob
+  ]
+}));
+
+// Sign and broadcast
+const signature = await wallet.signDigest(tx.sigDigest, postingKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log(`Post created: ${tx.id}`);
+```
+
+### Reply to a comment
+
+```typescript
+import { createHiveChain, ReplyOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const postingKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Reply to a post or comment
+tx.pushOperation(new ReplyOperation({
+  parentAuthor: "bob",
+  parentPermlink: "some-interesting-post",
+  author: "alice",
+  permlink: "re-some-interesting-post-20240101",
+  body: "Great post! Thanks for sharing this valuable information.",
+  title: "" // Usually empty for comments
+}));
+
+const signature = await wallet.signDigest(tx.sigDigest, postingKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Reply posted!");
+```
+
+## Account management
+
+### Update account authority
+
+```typescript
+import { createHiveChain, AccountAuthorityUpdateOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+
+// Import owner key (required for authority changes)
+const ownerKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Update posting authority
+tx.pushOperation(
+  new AccountAuthorityUpdateOperation({
+    accountName: "alice"
+  })
+    .addKeyPostingAuth("STM8ZSw7KjYWJoVvffQLCxj3iLkMHUB7ToyqEYvYj2kH8XdDH3MSL", 1)
+    .addAccountPostingAuth("bob", 1)
+    .updatePostingAuthorityThreshold(1)
+);
+
+const signature = await wallet.signDigest(tx.sigDigest, ownerKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Authority updated!");
+```
+
+### Delegate resource credits
+
+```typescript
+import { createHiveChain, ResourceCreditsOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const activeKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Delegate RC to another account
+tx.pushOperation(
+  new ResourceCreditsOperation("alice")
+    .delegate("bob", chain.vestsCoins(1000))
+);
+
+const signature = await wallet.signDigest(tx.sigDigest, activeKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("RC delegated!");
+```
+
+## Advanced operations
+
+### Create recurrent transfer
+
+```typescript
+import { createHiveChain, DefineRecurrentTransferOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const activeKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Create recurring transfer
+tx.pushOperation(new DefineRecurrentTransferOperation({
+  from: "alice",
+  to: "bob",
+  amount: chain.hiveCoins(10),
+  memo: "Monthly subscription payment",
+  recurrence: 24, // Every 24 hours
+  executions: 30, // 30 transfers total
+  pairId: 1 // Unique identifier
+}));
+
+const signature = await wallet.signDigest(tx.sigDigest, activeKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Recurrent transfer created!");
+```
+
+### Update witness properties
+
+```typescript
+import { createHiveChain, WitnessSetPropertiesOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const activeKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Update witness properties
+tx.pushOperation(
+  new WitnessSetPropertiesOperation("alice")
+    .update("account_creation_fee", chain.hiveCoins(3))
+    .update("hbd_interest_rate", 1000) // 10%
+    .update("url", "https://mywitness.example.com")
+);
+
+const signature = await wallet.signDigest(tx.sigDigest, activeKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Witness properties updated!");
+```
+
+## Community operations
+
+### Subscribe to community
+
+```typescript
+import { createHiveChain, CommunityOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const postingKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Subscribe to community
+tx.pushOperation(
+  new CommunityOperation("alice")
+    .subscribe("hive-174695")
+);
+
+const signature = await wallet.signDigest(tx.sigDigest, postingKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Subscribed to community!");
+```
+
+### Follow/unfollow accounts
+
+```typescript
+import { createHiveChain, FollowOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const postingKey = await wallet.importKey("5JWcdkhS...");
+
+const tx = await chain.createTransaction();
+
+// Follow an account
+tx.pushOperation(
+  new FollowOperation("alice")
+    .follow("bob", ["blog"])
+);
+
+const signature = await wallet.signDigest(tx.sigDigest, postingKey);
+tx.addSignature(signature);
+
+await chain.broadcast(tx);
+console.log("Now following bob!");
+```
+
+## Custom operations
+
+### Create custom game operation
+
+```typescript
+import { createHiveChain, OperationBase, IOperationSink, operation } from "@hiveio/wax";
+
+// Define custom operation class
+class SplinterlandsGame extends OperationBase {
+  private readonly operations: operation[] = [];
+
+  constructor(public readonly player: string) {
+    super();
+  }
+
+  public finalize(_sink: IOperationSink): Iterable<operation> {
+    return this.operations;
+  }
+
+  public enterTournament(tournamentId: string): this {
+    this.operations.push({
+      custom_json_operation: {
+        id: "sm_enter_tournament",
+        json: JSON.stringify({
+          tournament_id: tournamentId,
+          app: "splinterlands/0.7.139"
+        }),
+        required_auths: [],
+        required_posting_auths: [this.player]
+      }
+    });
+    return this;
+  }
+
+  public stakeTokens(amount: number): this {
+    this.operations.push({
+      custom_json_operation: {
+        id: "sm_stake_tokens",
+        json: JSON.stringify({
+          qty: amount.toFixed(3),
+          token: "SPS",
+          app: "splinterlands/0.7.139"
+        }),
+        required_auths: [],
+        required_posting_auths: [this.player]
+      }
+    });
+    return this;
+  }
+}
+
+// Use the custom operation
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+const game = new SplinterlandsGame("alice");
+game.enterTournament("tournament-123").stakeTokens(10);
+
+tx.pushOperation(game);
+
+console.log(`Transaction has ${tx.transaction.operations.length} operations`);
+```
+
+## Block exploration
+
+### Fetch and parse blocks
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Get current head block
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+const headBlockNum = props.head_block_number;
+
+console.log(`Current head block: ${headBlockNum}`);
+
+// Fetch block
+const blockData = await chain.api.block_api.get_block({
+  block_num: headBlockNum
+});
+
+const block = blockData.block;
+console.log(`\nBlock ${block.block_id}`);
+console.log(`Witness: ${block.witness}`);
+console.log(`Time: ${block.timestamp}`);
+console.log(`Transactions: ${block.transactions.length}`);
+
+// Parse transactions
+for (const [idx, tx] of block.transactions.entries()) {
+  console.log(`\nTransaction #${idx + 1}:`);
+  console.log(`  Operations: ${tx.operations.length}`);
+  
+  for (const op of tx.operations) {
+    const opType = Object.keys(op)[0];
+    console.log(`  - ${opType}`);
+  }
+}
+
+// Fetch block range
+const rangeData = await chain.api.block_api.get_block_range({
+  starting_block_num: headBlockNum - 10,
+  count: 10
+});
+
+console.log(`\nFetched ${rangeData.blocks.length} blocks`);
+```
+
+## Encryption
+
+### Encrypt memo in transfer
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const wax = await createWaxFoundation();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+
+// Import keys
+const aliceKey = await wallet.importKey("5JWcdkhS...");
+const bobMemoKey = "STM7Abc..."; // Bob's memo public key
+
+// Get head block ID from network
+const headBlockId = "0129d3f75e53c4c8e35b52548f5f2e45b3e0c8b3";
+
+// Create transaction with encryption
+const tx = wax.createTransactionWithTaPoS(headBlockId);
+
+tx
+  .startEncrypt(aliceKey, bobMemoKey)
+  .pushOperation({
+    transfer: {
+      from_account: "alice",
+      to_account: "bob",
+      amount: wax.hiveCoins(10),
+      memo: "This is a secret message" // Will be encrypted
+    }
+  })
+  .stopEncrypt();
+
+console.log("Transaction with encrypted memo ready");
+```
+
+## Key generation
+
+### Generate account keys
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+
+// Generate brain key
+const brainKeyData = wax.suggestBrainKey();
+console.log("Brain key:", brainKeyData.brainKey);
+console.log("Private key:", brainKeyData.wifPrivateKey);
+console.log("Public key:", brainKeyData.associatedPublicKey);
+
+// Generate keys from password
+const accountName = "alice";
+const password = "MySecurePassword123";
+
+const ownerKey = wax.getPrivateKeyFromPassword(accountName, "owner", password);
+const activeKey = wax.getPrivateKeyFromPassword(accountName, "active", password);
+const postingKey = wax.getPrivateKeyFromPassword(accountName, "posting", password);
+const memoKey = wax.getPrivateKeyFromPassword(accountName, "memo", password);
+
+console.log("\nGenerated keys for:", accountName);
+console.log("Owner:", ownerKey.associatedPublicKey);
+console.log("Active:", activeKey.associatedPublicKey);
+console.log("Posting:", postingKey.associatedPublicKey);
+console.log("Memo:", memoKey.associatedPublicKey);
+```
+
+## Asset conversions
+
+### Convert between asset types
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Get conversion factors from chain
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+const totalVestingFundHive = props.total_vesting_fund_hive;
+const totalVestingShares = props.total_vesting_shares;
+
+// Convert VESTS to HP
+const vests = chain.vestsCoins(1000000);
+const hp = chain.vestsToHp(vests, totalVestingFundHive, totalVestingShares);
+
+const hpData = chain.getAsset(hp);
+console.log(`1,000,000 VESTS = ${hpData.amount} ${hpData.symbol}`);
+
+// Convert HP to VESTS
+const hiveAmount = chain.hiveCoins(1000);
+const vestsAmount = chain.hpToVests(hiveAmount, totalVestingFundHive, totalVestingShares);
+
+const vestsData = chain.getAsset(vestsAmount);
+console.log(`1,000 HP = ${vestsData.amount} ${vestsData.symbol}`);
+
+// Get price feed
+const feed = await chain.api.database_api.get_feed_history({});
+const base = feed.current_median_history.base;
+const quote = feed.current_median_history.quote;
+
+// Convert HBD to HIVE
+const hbd = chain.hbdCoins(100);
+const hive = chain.hbdToHive(hbd, base, quote);
+
+const hiveData = chain.getAsset(hive);
+console.log(`100 HBD = ${hiveData.amount} ${hiveData.symbol}`);
+```
+
+## React application example
+
+Complete React component:
+
+```typescript App.tsx
+import { useState, useEffect } from "react";
+import { createHiveChain, type IHiveChainInterface } from "@hiveio/wax";
+import type { ApiAccount } from "@hiveio/wax";
+
+function App() {
+  const [chain, setChain] = useState<IHiveChainInterface | null>(null);
+  const [account, setAccount] = useState<ApiAccount | null>(null);
+  const [username, setUsername] = useState("alice");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize WAX
+  useEffect(() => {
+    createHiveChain()
+      .then((instance) => {
+        setChain(instance);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  // Fetch account
+  const fetchAccount = async () => {
+    if (!chain) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await chain.api.database_api.find_accounts({
+        accounts: [username]
+      });
+
+      if (result.accounts.length === 0) {
+        setError("Account not found");
+        setAccount(null);
+      } else {
+        setAccount(result.accounts[0]);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && !chain) {
+    return <div>Loading WAX...</div>;
+  }
+
+  return (
+    <div style={{ padding: "20px" }}>
+      <h1>Hive Account Viewer</h1>
+      
+      <div>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter username"
+        />
+        <button onClick={fetchAccount}>Search</button>
+      </div>
+
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: "red" }}>Error: {error}</p>}
+
+      {account && (
+        <div style={{ marginTop: "20px" }}>
+          <h2>{account.name}</h2>
+          <p><strong>Balance:</strong> {account.balance}</p>
+          <p><strong>HBD:</strong> {account.hbd_balance}</p>
+          <p><strong>VESTS:</strong> {account.vesting_shares}</p>
+          <p><strong>Created:</strong> {account.created}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Next steps
+
+Explore the SDK documentation:
+
+- Learn about [offline operations](/typescript/wax-foundation)
+- Discover [online operations](/typescript/hive-chain)
+- Read about [transaction building](/typescript/transactions)
+- Study [API calls](/typescript/api-calls)
+- Integrate with [frameworks](/typescript/framework-integration)

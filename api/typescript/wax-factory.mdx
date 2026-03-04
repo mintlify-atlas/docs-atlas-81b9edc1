@@ -1,0 +1,224 @@
+---
+title: WAX factory functions
+description: Create WAX instances for offline and online Hive blockchain operations
+---
+
+The WAX factory functions provide entry points to create instances for working with the Hive blockchain. Use `createWaxFoundation()` for offline operations and `createHiveChain()` for full chain access.
+
+## createWaxFoundation
+
+Creates a WAX foundation instance for offline operations including transaction building, signing, and validation.
+
+```typescript
+import { createWaxFoundation } from '@hiveio/wax';
+
+const wax = await createWaxFoundation({
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000"
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="Partial<IWaxOptions>" default="{}">
+  Optional configuration for the WAX instance
+  
+  <Expandable title="properties">
+    <ParamField path="chainId" type="THexString" default="beeab0de00000000000000000000000000000000000000000000000000000000">
+      Chain ID in hex string format. Defaults to mainnet chain ID.
+    </ParamField>
+    
+    <ParamField path="wasmLocation" type="string">
+      Path to the WASM file. Can be a relative path or absolute URL. If not specified, uses default path: `"./build_wasm/wax.common.wasm"` (may change if bundled).
+      
+      You can also specify a base64 encoded string of the WASM file for inlining.
+      
+      **Bundler examples:**
+      - Vite: `import wasmUrl from './my_wasm_files/wax.common.wasm?url';`
+      - Webpack: `const wasmUrl = new URL("./my_wasm_files/wax.common.wasm", import.meta.url).href;`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="Promise<IWaxBaseInterface>" type="Promise<IWaxBaseInterface>">
+  Promise that resolves to a WAX base interface instance
+</ResponseField>
+
+### Usage example
+
+```typescript
+import { createWaxFoundation } from '@hiveio/wax';
+
+// Create WAX foundation instance
+const wax = await createWaxFoundation();
+
+// Create a transaction
+const tx = wax.createTransactionWithTaPoS(
+  "0000000000000000000000000000000000000000",
+  "+1m"
+);
+
+// Add operations
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Get transaction JSON
+const txJson = tx.toApi();
+console.log(txJson);
+```
+
+### Error handling
+
+<ResponseField name="WaxError" type="Error">
+  Throws `WaxError` on any WAX API-related error during initialization
+</ResponseField>
+
+## createHiveChain
+
+Creates a WAX Hive chain instance with full chain access including API calls and transaction broadcasting.
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+
+const chain = await createHiveChain({
+  apiEndpoint: "https://api.hive.blog",
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000"
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="Partial<IWaxOptionsChain>" default="{}">
+  Optional configuration for the Hive chain instance
+  
+  <Expandable title="properties">
+    <ParamField path="chainId" type="THexString" default="beeab0de00000000000000000000000000000000000000000000000000000000">
+      Chain ID in hex string format
+    </ParamField>
+    
+    <ParamField path="apiEndpoint" type="string" default="https://api.hive.blog">
+      Endpoint for all JSON-RPC API requests
+    </ParamField>
+    
+    <ParamField path="restApiEndpoint" type="string" default="https://api.syncad.com">
+      Endpoint for all REST API requests
+    </ParamField>
+    
+    <ParamField path="apiTimeout" type="number" default="2000">
+      Timeout for all API requests in milliseconds. Set to 0 to disable timeout.
+    </ParamField>
+    
+    <ParamField path="waxApiCaller" type="string">
+      X-Wax-Api-Caller header value for all requests (both API and REST API). This header identifies the application making requests. If not set, the header will not be sent.
+    </ParamField>
+    
+    <ParamField path="wasmLocation" type="string">
+      Path to the WASM file (same as createWaxFoundation)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="Promise<IHiveChainInterface>" type="Promise<IHiveChainInterface>">
+  Promise that resolves to a Hive chain interface instance with full API access
+</ResponseField>
+
+### Usage example
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+
+// Create Hive chain instance
+const chain = await createHiveChain({
+  apiEndpoint: "https://api.hive.blog",
+  apiTimeout: 5000
+});
+
+// Get dynamic global properties
+const dgpo = await chain.api.database_api.get_dynamic_global_properties({});
+console.log('Head block:', dgpo.head_block_number);
+
+// Create transaction with automatic TAPOS
+const headBlockId = dgpo.head_block_id;
+const tx = chain.createTransactionWithTaPoS(headBlockId);
+
+// Add vote operation
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Sign and broadcast (requires signature provider)
+// const signature = await signer.signTransaction(tx.sigDigest);
+// tx.addSignature(signature);
+// await chain.api.network_broadcast_api.broadcast_transaction({ trx: tx.toApiJson() });
+```
+
+### Error handling
+
+<ResponseField name="WaxError" type="Error">
+  Throws `WaxError` on any WAX API-related error during initialization
+</ResponseField>
+
+## TypeScript types
+
+### IWaxOptions
+
+```typescript
+interface IWaxOptions extends IWaxBaseExtendibleOptions {
+  wasmLocation?: string;
+}
+
+interface IWaxBaseExtendibleOptions {
+  chainId: THexString;
+}
+```
+
+### IWaxOptionsChain
+
+```typescript
+interface IWaxOptionsChain extends IWaxOptions, IWaxChainExtendibleOptions {}
+
+interface IWaxChainExtendibleOptions extends IWaxBaseExtendibleOptions {
+  apiEndpoint: string;
+  restApiEndpoint: string;
+  waxApiCaller?: string;
+  apiTimeout: number;
+}
+```
+
+### Default options
+
+```typescript
+// Default WAX options
+const DEFAULT_WAX_OPTIONS: IWaxOptions = {
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000"
+};
+
+// Default chain options
+const DEFAULT_WAX_OPTIONS_CHAIN: IWaxOptionsChain = {
+  ...DEFAULT_WAX_OPTIONS,
+  apiEndpoint: "https://api.hive.blog",
+  restApiEndpoint: "https://api.syncad.com",
+  apiTimeout: 2000,
+  waxApiCaller: undefined
+};
+```
+
+## See also
+
+- [IWaxBaseInterface](/api/typescript/wax-base-interface) - Base interface methods
+- [IHiveChainInterface](/api/typescript/hive-chain-interface) - Chain interface with API access
+- [ITransaction](/api/typescript/transaction) - Transaction building and signing

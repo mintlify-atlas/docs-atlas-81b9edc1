@@ -1,0 +1,401 @@
+---
+title: Wax foundation (offline operations)
+description: Use create_wax_foundation for transaction building and validation without network access
+---
+
+The `create_wax_foundation()` factory function creates an offline interface for Hive blockchain operations. Use this when you need to build, sign, or validate transactions without connecting to a Hive node.
+
+## Factory function
+
+```python
+def create_wax_foundation(options: WaxOptions | None = None) -> IWaxBaseInterface:
+    """Factory function to provide wax base interface functionality."""
+```
+
+### Parameters
+
+<ParamField path="options" type="WaxOptions | None">
+  Optional configuration. Defaults to mainnet if not provided.
+  
+  ```python
+  class WaxOptions:
+      def __init__(self, chain_id: ChainId = DEFAULT_CHAIN_ID) -> None:
+          """Constructs WaxOptions.
+          
+          Args:
+              chain_id: chain id used for signing. Defaults to mainnet chain id.
+          """
+  ```
+</ParamField>
+
+### Returns
+
+Returns an `IWaxBaseInterface` instance with offline capabilities.
+
+## Basic usage
+
+```python
+from wax import create_wax_foundation
+
+# Create with default mainnet configuration
+wax = create_wax_foundation()
+
+# Access chain information
+print(f"Chain ID: {wax.chain_id}")
+print(f"Address prefix: {wax.address_prefix}")
+print(f"Config: {wax.config}")
+```
+
+## Custom chain configuration
+
+For testnet or custom chains:
+
+```python
+from wax import create_wax_foundation, WaxOptions
+
+# Testnet configuration
+testnet_options = WaxOptions(
+    chain_id="18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e"
+)
+wax = create_wax_foundation(testnet_options)
+```
+
+## Core capabilities
+
+### Transaction building
+
+Create transactions with TAPOS (Transaction as Proof of Stake):
+
+```python
+from datetime import timedelta
+from wax.proto.operations import transfer
+
+# Create transaction with TAPOS block reference
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000c3e7b1ed0697a9c8e7e1d....",
+    expiration=timedelta(minutes=1)  # Optional, defaults to 1 minute
+)
+
+# Add operations
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+)
+```
+
+### Transaction from existing data
+
+Load transactions from JSON or Protocol Buffer format:
+
+<Tabs>
+  <Tab title="From JSON">
+    ```python
+    from wax.transaction_type_aliases import JsonTransaction
+    
+    # API format JSON
+    tx_json: JsonTransaction = {
+        "ref_block_num": 50215,
+        "ref_block_prefix": 2140466769,
+        "expiration": "2016-09-15T19:47:33",
+        "operations": [
+            {
+                "type": "vote_operation",
+                "value": {
+                    "voter": "alice",
+                    "author": "bob",
+                    "permlink": "my-post",
+                    "weight": 10000
+                }
+            }
+        ],
+        "extensions": [],
+        "signatures": []
+    }
+    
+    tx = wax.create_transaction_from_json(tx_json)
+    ```
+  </Tab>
+  <Tab title="From protobuf">
+    ```python
+    from wax.proto.transaction import transaction
+    from wax.proto.operations import vote
+    
+    # Create protobuf transaction
+    proto_tx = transaction(
+        ref_block_num=50215,
+        ref_block_prefix=2140466769,
+        expiration="2016-09-15T19:47:33",
+        operations=[vote(
+            voter="alice",
+            author="bob",
+            permlink="my-post",
+            weight=10000
+        )]
+    )
+    
+    tx = wax.create_transaction_from_proto(proto_tx)
+    ```
+  </Tab>
+</Tabs>
+
+### Asset creation and conversion
+
+Work with HIVE, HBD, and VESTS:
+
+```python
+# Create assets using different methods
+hive_satoshis = wax.hive.satoshis(1000)  # 0.001 HIVE
+hive_pretty = wax.hive.pretty("1.234 HIVE")
+hive_nai = wax.hive.nai({"amount": "1234", "precision": 3, "nai": "@@000000021"})
+
+hbd_amount = wax.hbd.pretty("5.000 HBD")
+vests_amount = wax.vests.satoshis(1000000)
+
+# Convert VESTS to HP (Hive Power)
+hp = wax.vests_to_hp(
+    vests=vests_amount,
+    total_vesting_fund_hive=wax.hive.pretty("200000000.000 HIVE"),
+    total_vesting_shares=wax.vests.pretty("400000000.000000 VESTS")
+)
+
+# Convert between HBD and HIVE
+hive_from_hbd = wax.hbd_to_hive(
+    hbd=wax.hbd.pretty("1.000 HBD"),
+    base=wax.hbd.pretty("1.000 HBD"),
+    quote=wax.hive.pretty("0.250 HIVE")  # Price: 1 HBD = 0.250 HIVE
+)
+
+hbd_from_hive = wax.hive_to_hbd(
+    hive=wax.hive.pretty("1.000 HIVE"),
+    base=wax.hbd.pretty("1.000 HBD"),
+    quote=wax.hive.pretty("0.250 HIVE")
+)
+```
+
+### Cryptographic operations
+
+#### Generate keys
+
+```python
+# Generate brain key
+brain_key_data = wax.suggest_brain_key()
+print(f"Brain key: {brain_key_data.brain_key}")
+print(f"Private key: {brain_key_data.wif_private_key}")
+print(f"Public key: {brain_key_data.associated_public_key}")
+
+# Derive key from password
+private_key_data = wax.get_private_key_from_password(
+    account="alice",
+    role="posting",  # active, owner, posting, memo
+    password="master-password-here"
+)
+print(f"Private key: {private_key_data.wif_private_key}")
+print(f"Public key: {private_key_data.associated_public_key}")
+```
+
+#### Recover public key from signature
+
+```python
+# Get public key that created a signature
+public_key = wax.get_public_key_from_signature(
+    sig_digest="a1b2c3d4...",
+    signature="1f2e3d4c..."
+)
+```
+
+### Account validation
+
+```python
+# Check if account name is valid
+is_valid = wax.is_valid_account_name("alice")
+print(f"Valid: {is_valid}")  # True
+
+is_valid = wax.is_valid_account_name("Alice")  # Uppercase not allowed
+print(f"Valid: {is_valid}")  # False
+```
+
+### Operation analysis
+
+```python
+from wax.proto.operations import transfer, vote
+
+# Get impacted accounts from operation
+transfer_op = transfer(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.satoshis(1000),
+    memo=""
+)
+
+impacted = wax.get_operation_impacted_accounts(transfer_op)
+print(impacted)  # ["alice", "bob"]
+```
+
+### Manabar calculations
+
+```python
+from datetime import datetime
+
+# Calculate current manabar value
+manabar = wax.calculate_current_manabar_value(
+    head_block_time=datetime.fromisoformat("2024-01-15T10:30:00"),
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1705315800
+)
+
+print(f"Current mana: {manabar.current_mana}")
+print(f"Max mana: {manabar.max_mana}")
+print(f"Percent: {manabar.percent}%")
+
+# Calculate when manabar will be full
+full_at = wax.calculate_manabar_full_regeneration_time(
+    head_block_time=datetime.fromisoformat("2024-01-15T10:30:00"),
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1705315800
+)
+print(f"Full at: {full_at}")
+```
+
+### Economic calculations
+
+```python
+from decimal import Decimal
+
+# Calculate account HP
+hp = wax.calculate_account_hp(
+    vests=wax.vests.pretty("1000000.000000 VESTS"),
+    total_vesting_fund_hive=wax.hive.pretty("200000000.000 HIVE"),
+    total_vesting_shares=wax.vests.pretty("400000000.000000 VESTS")
+)
+
+# Calculate HP APR
+apr: Decimal = wax.calculate_hp_apr(
+    head_block_num=80000000,
+    vesting_reward_percent=15,
+    virtual_supply=wax.hive.pretty("500000000.000 HIVE"),
+    total_vesting_fund_hive=wax.hive.pretty("200000000.000 HIVE")
+)
+print(f"HP APR: {apr}%")
+
+# Estimate HBD interest
+interest = wax.estimate_hbd_interest(
+    account_hbd_seconds=1000000,
+    hbd_balance=wax.hbd.pretty("100.000 HBD"),
+    last_compounding_date=datetime.fromisoformat("2024-01-01T00:00:00"),
+    now=datetime.fromisoformat("2024-01-15T00:00:00"),
+    interest_rate=2000  # 20% in basis points
+)
+
+# Estimate HIVE collateral for HBD
+collateral = wax.estimate_hive_collateral(
+    current_median_history_base=wax.hbd.pretty("1.000 HBD"),
+    current_median_history_quote=wax.hive.pretty("0.250 HIVE"),
+    current_min_history_base=wax.hbd.pretty("1.000 HBD"),
+    current_min_history_quote=wax.hive.pretty("0.240 HIVE"),
+    hbd_amount_to_get=wax.hbd.pretty("100.000 HBD")
+)
+```
+
+## Transaction properties
+
+Access transaction information:
+
+```python
+# Get transaction ID
+tx_id = tx.id
+print(f"Transaction ID: {tx_id}")
+
+# Get signature digest
+sig_digest = tx.sig_digest
+print(f"Signature digest: {sig_digest}")
+
+# Check if signed
+if tx.is_signed:
+    print("Transaction is signed")
+    
+# Get signature keys
+if tx.is_signed:
+    keys = tx.signature_keys
+    print(f"Signed with: {keys}")
+
+# Get impacted accounts
+impacted = tx.impacted_accounts
+print(f"Impacted accounts: {impacted}")
+
+# Get required authorities
+required = tx.required_authorities
+print(f"Posting: {required.posting_accounts}")
+print(f"Active: {required.active_accounts}")
+print(f"Owner: {required.owner_accounts}")
+```
+
+## Transaction validation
+
+```python
+try:
+    tx.validate()
+    print("Transaction is valid")
+except Exception as e:
+    print(f"Validation failed: {e}")
+```
+
+## Transaction serialization
+
+Convert transactions to various formats:
+
+```python
+# To JSON string
+json_str = tx.to_string()
+
+# To API JSON dict
+api_json = tx.to_api_json()
+
+# To API dict
+api_dict = tx.to_dict()
+
+# To API string
+api_str = tx.to_api()
+
+# To binary (hex)
+binary = tx.to_binary_form()
+print(f"Serialized: {binary}")
+```
+
+## Signing offline
+
+For offline signing, you can manually add signatures:
+
+```python
+# Add signature manually
+signature = "1f2e3d4c5b6a7980..."  # From external signing process
+tx.add_signature(signature)
+```
+
+## When to use wax foundation
+
+Use `create_wax_foundation()` when you:
+
+- Need to build transactions in an air-gapped environment
+- Want to validate transactions without network access
+- Are implementing a signing service or hardware wallet
+- Need to work with transaction serialization and deserialization
+- Want to perform cryptographic operations offline
+
+For full blockchain interaction including API calls and broadcasting, use [`create_hive_chain()`](/python/hive-chain) instead.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Online operations" icon="globe" href="/python/hive-chain">
+    Learn about create_hive_chain for full blockchain access
+  </Card>
+  <Card title="Transaction management" icon="file-lines" href="/python/transactions">
+    Deep dive into building and signing transactions
+  </Card>
+</CardGroup>

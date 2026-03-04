@@ -1,0 +1,574 @@
+---
+title: Examples
+description: Complete working examples of common Hive blockchain operations in Python
+---
+
+This page provides complete, working examples for common Hive blockchain operations using the Python SDK.
+
+## Transfer tokens
+
+Send HIVE or HBD between accounts:
+
+```python
+import asyncio
+import os
+from wax import create_hive_chain, WaxChainOptions
+from wax.proto.operations import transfer
+from beekeepy import AsyncBeekeeper
+
+PRIVATE_KEY = os.getenv("PRIVATE_KEY", "5K...")
+PUBLIC_KEY = os.getenv("PUBLIC_KEY", "STM...")
+
+async def transfer_tokens():
+    wax = create_hive_chain(WaxChainOptions(
+        endpoint_url="https://api.hive.blog"
+    ))
+    
+    try:
+        # Create transaction
+        tx = await wax.create_transaction()
+        
+        # Add transfer operation
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=wax.hive.pretty("1.000 HIVE"),
+                memo="Payment for services"
+            )
+        )
+        
+        # Sign with Beekeeper
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="transfer_wallet",
+                password="password"
+            )
+            
+            if PUBLIC_KEY not in await wallet.public_keys:
+                await wallet.import_key(private_key=PRIVATE_KEY)
+            
+            await tx.sign(wallet=wallet, public_key=PUBLIC_KEY)
+        
+        # Broadcast
+        await wax.broadcast(tx)
+        print(f"Transfer successful! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(transfer_tokens())
+```
+
+## Vote on content
+
+Upvote or downvote posts and comments:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import vote
+from beekeepy import AsyncBeekeeper
+
+async def vote_on_post():
+    wax = create_hive_chain()
+    
+    try:
+        tx = await wax.create_transaction()
+        
+        # Upvote (100% weight)
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="my-awesome-post",
+                weight=10000  # 100% = 10000
+            )
+        )
+        
+        # Or downvote (negative weight)
+        # weight=-10000  # -100%
+        
+        # Sign and broadcast
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="vote_wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        await wax.broadcast(tx)
+        print(f"Vote successful! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(vote_on_post())
+```
+
+## Create post or comment
+
+Publish content to the blockchain:
+
+```python
+import asyncio
+import json
+from wax import create_hive_chain
+from wax.proto.operations import comment
+from beekeepy import AsyncBeekeeper
+
+async def create_post():
+    wax = create_hive_chain()
+    
+    try:
+        tx = await wax.create_transaction()
+        
+        # Prepare metadata
+        metadata = {
+            "tags": ["technology", "hive", "blockchain"],
+            "app": "my-app/1.0",
+            "format": "markdown"
+        }
+        
+        # Create post (root comment)
+        tx.push_operation(
+            comment(
+                parent_author="",              # Empty for root post
+                parent_permlink="technology",  # Category/tag
+                author="alice",
+                permlink="my-first-post-123",  # Unique permlink
+                title="My First Post",
+                body="This is the content of my post...",
+                json_metadata=json.dumps(metadata)
+            )
+        )
+        
+        # Sign and broadcast
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="post_wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        await wax.broadcast(tx)
+        print(f"Post created! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+async def create_comment():
+    wax = create_hive_chain()
+    
+    try:
+        tx = await wax.create_transaction()
+        
+        # Create comment (reply)
+        tx.push_operation(
+            comment(
+                parent_author="bob",           # Parent post author
+                parent_permlink="bobs-post",   # Parent post permlink
+                author="alice",
+                permlink="re-bobs-post-123",   # Unique permlink for comment
+                title="",                       # Comments typically have no title
+                body="Great post! Here's my comment...",
+                json_metadata="{}"
+            )
+        )
+        
+        # Sign and broadcast
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="comment_wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        await wax.broadcast(tx)
+        print(f"Comment created! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+# Run examples
+asyncio.run(create_post())
+# asyncio.run(create_comment())
+```
+
+## Update account authorities
+
+Modify account permissions:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.complex_operations.account_update import AccountAuthorityUpdateOperation
+from beekeepy import AsyncBeekeeper
+
+async def update_authorities():
+    wax = create_hive_chain()
+    
+    try:
+        # Create account update operation
+        # Automatically fetches current authorities from blockchain
+        account_update = await AccountAuthorityUpdateOperation.create_for(
+            wax, "alice"
+        )
+        
+        # Add posting authority for another account
+        account_update.roles.posting.add("bob", weight=1)
+        
+        # Update memo key
+        account_update.roles.memo.set("STM...new_memo_key...")
+        
+        # Add active authority
+        account_update.roles.active.add("charlie", weight=1)
+        
+        # Add to transaction
+        tx = await wax.create_transaction()
+        tx.push_operation(account_update)
+        
+        # Sign and broadcast
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="auth_wallet",
+                password="password"
+            )
+            # Need active key for account_update
+            await wallet.import_key(private_key="5K...active_key...")
+            await tx.sign(wallet=wallet, public_key="STM...active_public...")
+        
+        await wax.broadcast(tx)
+        print(f"Authorities updated! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(update_authorities())
+```
+
+## Query account information
+
+Retrieve and analyze account data:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from decimal import Decimal
+
+async def get_account_info(account_name: str):
+    wax = create_hive_chain()
+    
+    try:
+        # Get account
+        accounts = await wax.api.database_api.find_accounts(
+            accounts=[account_name]
+        )
+        
+        if not accounts.accounts:
+            print(f"Account {account_name} not found")
+            return
+        
+        account = accounts.accounts[0]
+        
+        # Get dynamic global properties for calculations
+        dgpo = await wax.api.database_api.get_dynamic_global_properties()
+        
+        # Calculate Hive Power
+        hp = wax.vests_to_hp(
+            vests=account.vesting_shares,
+            total_vesting_fund_hive=dgpo.total_vesting_fund_hive,
+            total_vesting_shares=dgpo.total_vesting_shares
+        )
+        
+        # Calculate voting manabar
+        voting_mana = wax.calculate_current_manabar_value(
+            head_block_time=dgpo.time,
+            max_mana=int(account.post_voting_power.amount),
+            current_mana=account.voting_manabar.current_mana,
+            last_update_time=account.voting_manabar.last_update_time
+        )
+        
+        # Get RC information
+        rc_response = await wax.api.rc_api.find_rc_accounts(
+            accounts=[account_name]
+        )
+        rc_account = rc_response.rc_accounts[0]
+        
+        rc_mana = wax.calculate_current_manabar_value(
+            head_block_time=dgpo.time,
+            max_mana=rc_account.max_rc,
+            current_mana=rc_account.rc_manabar.current_mana,
+            last_update_time=rc_account.rc_manabar.last_update_time
+        )
+        
+        # Display results
+        print(f"\n=== Account: {account_name} ===")
+        print(f"\nBalances:")
+        print(f"  HIVE: {account.balance}")
+        print(f"  HBD: {account.hbd_balance}")
+        print(f"  HP: {hp}")
+        print(f"  Savings HIVE: {account.savings_balance}")
+        print(f"  Savings HBD: {account.savings_hbd_balance}")
+        
+        print(f"\nManabars:")
+        print(f"  Voting: {voting_mana.percent:.2f}%")
+        print(f"  RC: {rc_mana.percent:.2f}%")
+        
+        print(f"\nStats:")
+        print(f"  Posts: {account.post_count}")
+        print(f"  Reputation: {account.reputation}")
+        print(f"  Created: {account.created}")
+        print(f"  Last post: {account.last_post}")
+        
+        print(f"\nWitness:")
+        print(f"  Voting for: {account.witnesses_voted_for} witnesses")
+        print(f"  Proxy: {account.proxy if account.proxy else 'None'}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(get_account_info("alice"))
+```
+
+## Monitor blockchain events
+
+Stream and process blocks:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.wax_visitor import OperationVisitor
+from wax.proto.operations import transfer, vote, comment
+
+class TransferMonitor(OperationVisitor):
+    """Monitor transfer operations."""
+    
+    def transfer(self, op: transfer) -> None:
+        print(f"Transfer: {op.from_account} -> {op.to_account}: {op.amount}")
+        if op.memo:
+            print(f"  Memo: {op.memo}")
+
+async def monitor_transfers(start_block: int, num_blocks: int = 10):
+    wax = create_hive_chain()
+    monitor = TransferMonitor()
+    
+    try:
+        print(f"Monitoring blocks {start_block} to {start_block + num_blocks}...\n")
+        
+        for block_num in range(start_block, start_block + num_blocks):
+            # Get block
+            block = await wax.api.database_api.get_block(block_num=block_num)
+            
+            if not block:
+                print(f"Block {block_num} not found")
+                continue
+            
+            print(f"Block {block_num} - {len(block.transactions)} transactions")
+            
+            # Process each transaction
+            for tx in block.transactions:
+                for op in tx.operations:
+                    # Use visitor to handle operations
+                    monitor.accept(op)
+            
+            print()
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(monitor_transfers(start_block=80000000, num_blocks=5))
+```
+
+## Multi-operation transaction
+
+Combine multiple operations in a single transaction:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import transfer, vote, comment
+from beekeepy import AsyncBeekeeper
+
+async def multi_operation_tx():
+    wax = create_hive_chain()
+    
+    try:
+        # Create transaction
+        tx = await wax.create_transaction()
+        
+        # Add multiple operations
+        tx.push_operation(
+            # 1. Create a post
+            comment(
+                parent_author="",
+                parent_permlink="technology",
+                author="alice",
+                permlink="my-post-123",
+                title="My Post",
+                body="Content...",
+                json_metadata="{}"
+            )
+        ).push_operation(
+            # 2. Vote on another post
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="bobs-post",
+                weight=10000
+            )
+        ).push_operation(
+            # 3. Send a transfer
+            transfer(
+                from_account="alice",
+                to_account="charlie",
+                amount=wax.hive.pretty("0.001 HIVE"),
+                memo="Thanks!"
+            )
+        )
+        
+        print(f"Transaction has {len(tx.transaction.operations)} operations")
+        print(f"Impacted accounts: {tx.impacted_accounts}")
+        
+        # Sign and broadcast
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="multi_wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        await wax.broadcast(tx)
+        print(f"Multi-operation TX successful! {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(multi_operation_tx())
+```
+
+## Custom API extension
+
+Extend the API with custom endpoints:
+
+```python
+import asyncio
+from typing import Any
+from beekeepy.handle.remote import AbstractAsyncApi
+from wax import create_hive_chain
+from wax.api.collection import DatabaseApi as BaseDatabaseApi
+
+# Override existing API
+class DatabaseApi(BaseDatabaseApi):
+    @BaseDatabaseApi.endpoint_jsonrpc
+    async def get_config(self) -> Any:
+        """Get blockchain configuration."""
+        ...
+
+# Add new API
+class BlockApi(AbstractAsyncApi):
+    @AbstractAsyncApi.endpoint_jsonrpc
+    async def get_block_header(self, *, block_num: int) -> Any:
+        """Get block header."""
+        ...
+
+# Create collection
+class MyApiCollection:
+    def __init__(self) -> None:
+        self.database_api = DatabaseApi
+        self.block_api = BlockApi
+
+async def use_custom_api():
+    wax = create_hive_chain()
+    wax_extended = wax.extends(MyApiCollection)
+    
+    try:
+        # Use custom endpoints
+        config = await wax_extended.api.database_api.get_config()
+        print(f"Config: {config}")
+        
+        header = await wax_extended.api.block_api.get_block_header(
+            block_num=80000000
+        )
+        print(f"Block header: {header}")
+        
+    finally:
+        wax_extended.teardown()
+
+asyncio.run(use_custom_api())
+```
+
+## Offline transaction signing
+
+Build and sign transactions without network access:
+
+```python
+import asyncio
+from wax import create_wax_foundation
+from wax.proto.operations import transfer
+from beekeepy import AsyncBeekeeper
+
+async def offline_signing():
+    # Create offline foundation
+    wax = create_wax_foundation()
+    
+    # Create transaction with manual TAPOS
+    # (TAPOS data obtained from a previous API call)
+    tx = wax.create_transaction_with_tapos(
+        tapos_block_id="0000c3e7b1ed0697a9c8e7e1d8762c2b..."
+    )
+    
+    # Add operation
+    tx.push_operation(
+        transfer(
+            from_account="alice",
+            to_account="bob",
+            amount=wax.hive.pretty("1.000 HIVE"),
+            memo="Offline payment"
+        )
+    )
+    
+    # Validate offline
+    tx.validate()
+    print(f"Transaction valid: {tx.id}")
+    
+    # Sign offline
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(
+            name="offline_wallet",
+            password="password"
+        )
+        await wallet.import_key(private_key="5K...")
+        await tx.sign(wallet=wallet, public_key="STM...")
+    
+    # Export for later broadcast
+    tx_json = tx.to_api_json()
+    print(f"Signed transaction (JSON): {tx_json}")
+    
+    # The JSON can now be broadcast from another system
+    # with network access using wax.broadcast()
+
+asyncio.run(offline_signing())
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="book" href="/python/overview">
+    Return to Python SDK overview
+  </Card>
+  <Card title="API reference" icon="code" href="/python/api-calls">
+    Explore all available API endpoints
+  </Card>
+</CardGroup>

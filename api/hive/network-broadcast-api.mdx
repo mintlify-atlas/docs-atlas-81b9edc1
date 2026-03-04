@@ -1,0 +1,296 @@
+---
+title: Network broadcast API
+description: Broadcast signed transactions to the Hive blockchain network
+---
+
+The Network Broadcast API allows you to broadcast signed transactions to the Hive blockchain. Use this API to submit transactions after they have been properly signed with the required authorities.
+
+## broadcast_transaction
+
+Broadcast a signed transaction to the network.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+// Create and sign transaction
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+tx.sign(wallet, publicKey);
+
+// Broadcast using the chain helper
+await chain.broadcast(tx);
+
+// Or call the API directly
+await chain.api.network_broadcast_api.broadcast_transaction({
+  trx: tx.transaction,
+  max_block_age: -1
+});
+
+console.log("Transaction broadcasted successfully");
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+# Create and sign transaction
+tx = await chain.create_transaction()
+tx.push_operation(
+    vote={
+        "voter": "alice",
+        "author": "bob",
+        "permlink": "example-post",
+        "weight": 10000
+    }
+)
+tx.sign(wallet, public_key)
+
+# Broadcast using the chain helper
+await chain.broadcast(tx)
+
+# Or call the API directly
+await chain.api.network_broadcast_api.broadcast_transaction(
+    trx=tx.transaction,
+    max_block_age=-1
+)
+
+print("Transaction broadcasted successfully")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="trx" type="ApiTransaction" required>
+  The signed transaction to broadcast
+
+  <Expandable title="ApiTransaction properties">
+    <ParamField path="ref_block_num" type="number">
+      Reference block number for TaPoS (Transaction as Proof of Stake)
+    </ParamField>
+
+    <ParamField path="ref_block_prefix" type="number">
+      Reference block prefix for TaPoS
+    </ParamField>
+
+    <ParamField path="expiration" type="string">
+      Transaction expiration time in ISO format
+    </ParamField>
+
+    <ParamField path="operations" type="ApiOperation[]">
+      Array of operations to execute
+    </ParamField>
+
+    <ParamField path="extensions" type="object[]">
+      Transaction extensions
+    </ParamField>
+
+    <ParamField path="signatures" type="string[]">
+      Array of hex-encoded signatures
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="max_block_age" type="number" required>
+  Maximum block age in seconds. Use -1 to disable the check.
+</ParamField>
+
+### Response
+
+This endpoint returns an empty response on success. If the transaction is invalid or cannot be broadcast, an error will be thrown.
+
+<RequestExample>
+```json Example Request
+{
+  "trx": {
+    "ref_block_num": 12345,
+    "ref_block_prefix": 987654321,
+    "expiration": "2026-03-04T12:05:00",
+    "operations": [
+      {
+        "type": "vote",
+        "value": {
+          "voter": "alice",
+          "author": "bob",
+          "permlink": "example-post",
+          "weight": 10000
+        }
+      }
+    ],
+    "extensions": [],
+    "signatures": [
+      "1f7f0c3e89e6ccef1ae156a96fb4255e619ca3a73ef3be46746b4b40a66cc4252070eb313cc6308bbee39a0a9fc38ef99137ead3c9b003584c0a1b8f5ca2ff8707"
+    ]
+  },
+  "max_block_age": -1
+}
+```
+</RequestExample>
+
+## Transaction lifecycle
+
+Before broadcasting a transaction, follow these steps:
+
+### 1. Create transaction with TaPoS
+
+Transactions require TaPoS (Transaction as Proof of Stake) data for security:
+
+<CodeGroup>
+```typescript TypeScript
+// Get TaPoS from current blockchain state
+const tx = await chain.createTransaction();
+
+// Or create with specific block reference
+const tx = chain.createTransactionWithTaPoS(
+  "04c1c7a566fc0da66aee465714acee7346b48ac2",
+  "2026-03-04T12:00:00"
+);
+```
+
+```python Python
+# Get TaPoS from current blockchain state
+tx = await chain.create_transaction()
+
+# Or create with specific block reference
+tx = chain.create_transaction_with_tapos(
+    "04c1c7a566fc0da66aee465714acee7346b48ac2",
+    "2026-03-04T12:00:00"
+)
+```
+</CodeGroup>
+
+### 2. Add operations
+
+Push one or more operations to the transaction:
+
+<CodeGroup>
+```typescript TypeScript
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Validate the transaction
+tx.validate();
+```
+
+```python Python
+tx.push_operation(
+    vote={
+        "voter": "alice",
+        "author": "bob",
+        "permlink": "example-post",
+        "weight": 10000
+    }
+)
+
+# Validate the transaction
+tx.validate()
+```
+</CodeGroup>
+
+### 3. Sign transaction
+
+Sign with the required authority (posting, active, or owner):
+
+<CodeGroup>
+```typescript TypeScript
+// Sign with beekeeper wallet
+tx.sign(wallet, "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh");
+
+// Or sign with private key directly
+const wax = await createWaxFoundation();
+const signature = wax.createSignature(
+  tx.sigDigest,
+  "5JkFnXrLM2ap9t3AmAxBJvQHF7xSKtnTrCTginQCkhzU5S7ecPT"
+);
+tx.transaction.signatures.push(signature);
+```
+
+```python Python
+# Sign with beekeeper wallet
+tx.sign(wallet, "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh")
+
+# Or sign with private key directly
+wax = create_wax_foundation()
+signature = wax.create_signature(
+    tx.sig_digest,
+    "5JkFnXrLM2ap9t3AmAxBJvQHF7xSKtnTrCTginQCkhzU5S7ecPT"
+)
+tx.transaction.signatures.append(signature)
+```
+</CodeGroup>
+
+### 4. Broadcast
+
+Broadcast the signed transaction to the network:
+
+<CodeGroup>
+```typescript TypeScript
+await chain.broadcast(tx);
+```
+
+```python Python
+await chain.broadcast(tx)
+```
+</CodeGroup>
+
+## Error handling
+
+Handle common broadcasting errors:
+
+<CodeGroup>
+```typescript TypeScript
+try {
+  await chain.broadcast(tx);
+  console.log("Transaction successful");
+} catch (error) {
+  if (error.message.includes("expired")) {
+    console.error("Transaction expired, create a new one");
+  } else if (error.message.includes("signature")) {
+    console.error("Invalid signature");
+  } else if (error.message.includes("authority")) {
+    console.error("Missing required authority");
+  } else {
+    console.error("Broadcast failed:", error);
+  }
+}
+```
+
+```python Python
+try:
+    await chain.broadcast(tx)
+    print("Transaction successful")
+except Exception as error:
+    if "expired" in str(error):
+        print("Transaction expired, create a new one")
+    elif "signature" in str(error):
+        print("Invalid signature")
+    elif "authority" in str(error):
+        print("Missing required authority")
+    else:
+        print(f"Broadcast failed: {error}")
+```
+</CodeGroup>
+
+## Common errors
+
+- **Transaction expired**: The transaction expiration time has passed. Create a new transaction with fresh TaPoS data.
+- **Missing authority**: The transaction is not signed with the required authority (posting, active, or owner).
+- **Duplicate transaction**: A transaction with the same operations and expiration already exists in the blockchain.
+- **Insufficient RC**: The account doesn't have enough Resource Credits to execute the operations.
+- **Invalid signature**: The signature doesn't match the transaction or public key.

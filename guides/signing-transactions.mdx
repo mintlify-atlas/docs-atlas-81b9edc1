@@ -1,0 +1,608 @@
+---
+title: "Signing transactions"
+description: "Guide to signing transactions with different providers"
+---
+
+Signing is a critical step that proves you have authority to execute the operations in a transaction. WAX supports multiple signing providers for different use cases.
+
+## Understanding signatures
+
+Every transaction must be signed with one or more private keys that correspond to the authorities required by the operations in the transaction.
+
+<Steps>
+  <Step title="Check required authorities">
+    Before signing, determine which authorities are needed for your transaction.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        const authorities = tx.requiredAuthorities;
+
+        console.log('Posting accounts:', Array.from(authorities.posting));
+        console.log('Active accounts:', Array.from(authorities.active));
+        console.log('Owner accounts:', Array.from(authorities.owner));
+        console.log('Other authorities:', authorities.other);
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        authorities = tx.required_authorities
+
+        print(f'Posting accounts: {authorities.posting_accounts}')
+        print(f'Active accounts: {authorities.active_accounts}')
+        print(f'Owner accounts: {authorities.owner_accounts}')
+        print(f'Other authorities: {authorities.other_authorities}')
+        ```
+      </Tab>
+    </Tabs>
+
+    <Info>
+      Most operations require **posting** authority (votes, comments). Financial operations require **active** authority (transfers, power ups). Account recovery requires **owner** authority.
+    </Info>
+  </Step>
+
+  <Step title="Get the signature digest">
+    The signature digest is what you actually sign. It's a cryptographic hash of the transaction.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        // Get signature digest for HF26+ serialization
+        const sigDigest = tx.sigDigest;
+        console.log('Signature digest:', sigDigest);
+
+        // Get legacy signature digest (pre-HF26)
+        const legacySigDigest = tx.legacy_sigDigest;
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        # Get signature digest
+        sig_digest = tx.sig_digest
+        print(f'Signature digest: {sig_digest}')
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Sign with a provider">
+    Use your preferred signing provider to sign the transaction. See the sections below for provider-specific examples.
+  </Step>
+
+  <Step title="Verify signatures">
+    After signing, you can verify which public keys signed the transaction.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        // Get public keys that signed the transaction
+        const signerKeys = tx.signatureKeys;
+        console.log('Signers:', signerKeys);
+
+        // Check if transaction is signed
+        if (tx.isSigned()) {
+          console.log('Transaction has signatures');
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        # Get public keys that signed the transaction
+        signer_keys = tx.signature_keys
+        print(f'Signers: {signer_keys}')
+
+        # Check if transaction is signed
+        if tx.is_signed:
+            print('Transaction has signatures')
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Signing with Beekeeper
+
+Beekeeper is the official wallet solution for Hive. It provides secure key management and signing.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import beekeeperFactory from '@hiveio/beekeeper';
+
+    async function signWithBeekeeper() {
+      // Initialize Beekeeper
+      const beekeeper = await beekeeperFactory();
+      const session = beekeeper.createSession('my-app-salt');
+
+      // Create wallet
+      const { wallet } = await session.createWallet('my-wallet');
+
+      // Import private key
+      const privateKey = '5JNHfZYKGaomSFvd4NUdQ9qMcEAC43kujbfjueTHpVapX1Kzq2n';
+      await wallet.importKey(privateKey);
+
+      // Get public key
+      const [publicKey] = wallet.getPublicKeys();
+
+      // Create and sign transaction
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      });
+
+      // Sign with Beekeeper wallet
+      const signature = tx.sign(wallet, publicKey);
+      console.log('Signature:', signature);
+
+      return tx;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from beekeepy import AsyncBeekeeper
+    from wax import create_hive_chain
+    from wax.proto.operations import vote
+
+    async def sign_with_beekeeper():
+        # Initialize Beekeeper
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="my-app-salt")
+            wallet = await session.create_wallet(
+                name="my-wallet",
+                password="secure-password"
+            )
+
+            # Import private key
+            private_key = "5JNHfZYKGaomSFvd4NUdQ9qMcEAC43kujbfjueTHpVapX1Kzq2n"
+            await wallet.import_key(private_key=private_key)
+
+            # Get public key
+            public_keys = await wallet.public_keys
+            public_key = public_keys[0]
+
+            # Create and sign transaction
+            chain = create_hive_chain()
+            tx = await chain.create_transaction()
+
+            tx.push_operation(
+                vote(
+                    voter="alice",
+                    author="bob",
+                    permlink="example-post",
+                    weight=10000
+                )
+            )
+
+            # Sign with Beekeeper wallet
+            signature = await tx.sign(wallet=wallet, public_key=public_key)
+            print(f'Signature: {signature}')
+
+            return tx
+
+    asyncio.run(sign_with_beekeeper())
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Beekeeper runs as a separate process and manages keys securely. Never hardcode private keys in production code.
+</Note>
+
+## Signing with Hive Keychain
+
+Hive Keychain is a browser extension that provides secure signing for web applications.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { KeychainSigner } from '@hiveio/signers-keychain';
+
+    async function signWithKeychain() {
+      // Initialize Keychain signer
+      const signer = new KeychainSigner();
+
+      // Create transaction
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      });
+
+      // Sign with Keychain
+      const signedTx = await signer.signTransaction(
+        tx,
+        "alice", // username
+        "posting" // key type
+      );
+
+      console.log('Signed transaction:', signedTx);
+      return signedTx;
+    }
+    ```
+  </Tab>
+  <Tab title="Browser Example">
+    ```html
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Keychain Signing</title>
+    </head>
+    <body>
+      <button id="sign-btn">Sign Transaction</button>
+      <script type="module">
+        import { createHiveChain } from '@hiveio/wax';
+        import { KeychainSigner } from '@hiveio/signers-keychain';
+
+        document.getElementById('sign-btn').addEventListener('click', async () => {
+          try {
+            const signer = new KeychainSigner();
+            const chain = await createHiveChain();
+            const tx = await chain.createTransaction();
+
+            tx.pushOperation({
+              vote_operation: {
+                voter: "alice",
+                author: "bob",
+                permlink: "example-post",
+                weight: 10000
+              }
+            });
+
+            const signedTx = await signer.signTransaction(tx, "alice", "posting");
+            console.log('Transaction signed!', signedTx);
+            alert('Transaction signed successfully!');
+          } catch (error) {
+            console.error('Signing failed:', error);
+            alert('Signing failed: ' + error.message);
+          }
+        });
+      </script>
+    </body>
+    </html>
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Hive Keychain must be installed in the user's browser. Always check if Keychain is available before attempting to sign.
+</Warning>
+
+## Signing with MetaMask
+
+MetaMask Snaps enables signing Hive transactions using MetaMask.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { MetaMaskSigner } from '@hiveio/signers-metamask';
+
+    async function signWithMetaMask() {
+      // Initialize MetaMask signer
+      const signer = new MetaMaskSigner();
+
+      // Connect to MetaMask Snap
+      await signer.connect();
+
+      // Create transaction
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        transfer_operation: {
+          from_account: "alice",
+          to_account: "bob",
+          amount: chain.hive.satoshis(1),
+          memo: "Payment"
+        }
+      });
+
+      // Sign with MetaMask
+      const signedTx = await signer.signTransaction(tx, "alice");
+
+      console.log('Signed with MetaMask:', signedTx);
+      return signedTx;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Signing with PeakVault
+
+PeakVault is a mobile wallet that supports signing through deep links.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { PeakVaultSigner } from '@hiveio/signers-peakvault';
+
+    async function signWithPeakVault() {
+      // Initialize PeakVault signer
+      const signer = new PeakVaultSigner({
+        callbackUrl: 'myapp://signed' // Your app's deep link
+      });
+
+      // Create transaction
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      });
+
+      // Sign with PeakVault (opens mobile app)
+      const signedTx = await signer.signTransaction(tx, "alice");
+
+      console.log('Signed with PeakVault:', signedTx);
+      return signedTx;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Manual signing
+
+You can also sign transactions manually if you have the private key.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+
+    async function manualSign() {
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      });
+
+      // Get signature digest
+      const digest = tx.sigDigest;
+
+      // Sign with your signing method
+      const signature = yourSigningFunction(digest, privateKey);
+
+      // Add signature to transaction
+      tx.addSignature(signature);
+
+      return tx;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.proto.operations import vote
+
+    async def manual_sign():
+        chain = create_hive_chain()
+        tx = await chain.create_transaction()
+
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="example-post",
+                weight=10000
+            )
+        )
+
+        # Get signature digest
+        digest = tx.sig_digest
+
+        # Sign with your signing method
+        signature = your_signing_function(digest, private_key)
+
+        # Add signature to transaction
+        tx.add_signature(signature)
+
+        return tx
+
+    asyncio.run(manual_sign())
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Be extremely careful when handling private keys directly. Never expose them in client-side code or logs.
+</Warning>
+
+## Multi-signature transactions
+
+Some operations require multiple signatures from different authorities.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import beekeeperFactory from '@hiveio/beekeeper';
+
+    async function multiSigTransaction() {
+      const beekeeper = await beekeeperFactory();
+      const session = beekeeper.createSession('multi-sig');
+
+      // Create two wallets with different keys
+      const { wallet: wallet1 } = await session.createWallet('wallet1');
+      await wallet1.importKey(privateKey1);
+      const [pubKey1] = wallet1.getPublicKeys();
+
+      const { wallet: wallet2 } = await session.createWallet('wallet2');
+      await wallet2.importKey(privateKey2);
+      const [pubKey2] = wallet2.getPublicKeys();
+
+      // Create transaction requiring multiple signatures
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+
+      tx.pushOperation({
+        // Operation requiring multiple authorities
+        account_update_operation: {
+          account: "alice",
+          // ... account update details
+        }
+      });
+
+      // Sign with first wallet
+      tx.sign(wallet1, pubKey1);
+
+      // Sign with second wallet
+      tx.sign(wallet2, pubKey2);
+
+      console.log('Multi-sig transaction signed');
+      console.log('Signatures:', tx.transaction.signatures);
+
+      return tx;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from beekeepy import AsyncBeekeeper
+    from wax import create_hive_chain
+    from wax.proto.operations import account_update
+
+    async def multi_sig_transaction():
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="multi-sig")
+
+            # Create two wallets with different keys
+            wallet1 = await session.create_wallet(
+                name="wallet1",
+                password="password1"
+            )
+            await wallet1.import_key(private_key=private_key1)
+            pub_keys1 = await wallet1.public_keys
+            pub_key1 = pub_keys1[0]
+
+            wallet2 = await session.create_wallet(
+                name="wallet2",
+                password="password2"
+            )
+            await wallet2.import_key(private_key=private_key2)
+            pub_keys2 = await wallet2.public_keys
+            pub_key2 = pub_keys2[0]
+
+            # Create transaction requiring multiple signatures
+            chain = create_hive_chain()
+            tx = await chain.create_transaction()
+
+            tx.push_operation(
+                account_update(
+                    account="alice",
+                    # ... account update details
+                )
+            )
+
+            # Sign with first wallet
+            await tx.sign(wallet=wallet1, public_key=pub_key1)
+
+            # Sign with second wallet
+            await tx.sign(wallet=wallet2, public_key=pub_key2)
+
+            print('Multi-sig transaction signed')
+            print(f'Signatures: {tx.transaction.signatures}')
+
+            return tx
+
+    asyncio.run(multi_sig_transaction())
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Validate before signing">
+    Always validate your transaction before attempting to sign it. This catches errors early and prevents wasted signing attempts.
+
+    ```typescript
+    tx.validate();
+    const signature = tx.sign(wallet, publicKey);
+    ```
+  </Accordion>
+
+  <Accordion title="Check required authorities">
+    Before signing, verify that you have the correct authority level for the operations in your transaction.
+
+    ```typescript
+    const authorities = tx.requiredAuthorities;
+    if (authorities.active.size > 0) {
+      console.log('This transaction requires active authority');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Handle signing errors gracefully">
+    Signing can fail for various reasons (user rejection, wrong key, etc.). Always handle errors appropriately.
+
+    ```typescript
+    try {
+      const signature = await tx.sign(wallet, publicKey);
+    } catch (error) {
+      if (error.message.includes('user rejected')) {
+        console.log('User cancelled signing');
+      } else {
+        console.error('Signing failed:', error);
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Never expose private keys">
+    Private keys should never be:
+    - Hardcoded in source code (except for testing)
+    - Logged to console or files
+    - Sent over insecure connections
+    - Stored in plaintext
+
+    Use secure signing providers like Beekeeper or Keychain instead.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Broadcasting transactions" icon="tower-broadcast" href="/guides/broadcasting">
+    Learn how to broadcast your signed transactions
+  </Card>
+  <Card title="Signing providers" icon="key" href="/extensions/overview">
+    Explore all available signing provider extensions
+  </Card>
+  <Card title="Beekeeper setup" icon="shield-halved" href="/extensions/signers-beekeeper">
+    Detailed guide to using Beekeeper
+  </Card>
+  <Card title="Keychain integration" icon="puzzle-piece" href="/extensions/signers-keychain">
+    Integrate Hive Keychain in your web app
+  </Card>
+</CardGroup>

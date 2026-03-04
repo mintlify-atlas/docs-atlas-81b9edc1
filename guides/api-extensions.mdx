@@ -1,0 +1,664 @@
+---
+title: "API extensions"
+description: "Extending the API with custom endpoints"
+---
+
+WAX allows you to extend the base API with custom endpoints, override existing methods, or add entirely new API namespaces. This is useful for working with custom Hive nodes or adding application-specific functionality.
+
+## Understanding API structure
+
+Hive uses a JSON-RPC API organized into namespaces:
+
+- `database_api` - Read blockchain data
+- `block_api` - Get block information  
+- `network_broadcast_api` - Broadcast transactions
+- `account_by_key_api` - Look up accounts by public key
+- Custom APIs - Your own endpoints
+
+<Info>
+  WAX generates TypeScript types and Python classes for all standard Hive API methods automatically.
+</Info>
+
+## Extending existing APIs
+
+Add new methods to existing API namespaces.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { DatabaseApi as BaseDatabaseApi } from '@hiveio/wax';
+
+    // Extend the DatabaseApi class
+    class DatabaseApi extends BaseDatabaseApi {
+      // Add a method that doesn't exist in base
+      @BaseDatabaseApi.endpointJsonrpc
+      async get_config(): Promise<any> {
+        // Method body is generated automatically
+        // Return type can be any or a specific interface
+      }
+
+      // Override an existing method to change behavior
+      @BaseDatabaseApi.endpointJsonrpc
+      async find_accounts(args: { accounts: string[] }): Promise<any> {
+        // Custom implementation or call to parent
+        const result = await super.find_accounts(args);
+        // Add custom processing
+        return result;
+      }
+    }
+
+    // Create API collection with extended class
+    class MyApiCollection {
+      database_api = DatabaseApi;
+    }
+
+    // Use the extended API
+    const wax = await createHiveChain();
+    const extendedWax = wax.extend(MyApiCollection);
+
+    // Now you can use the custom method
+    const config = await extendedWax.api.database_api.get_config();
+    console.log('Node config:', config);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from typing import Any
+    from wax import create_hive_chain
+    from wax.api.collection import DatabaseApi as BaseDatabaseApi
+
+    # Extend the DatabaseApi class
+    class DatabaseApi(BaseDatabaseApi):
+        # Add a method that doesn't exist in base
+        @BaseDatabaseApi.endpoint_jsonrpc
+        async def get_config(self) -> Any:
+            # Method body is generated automatically
+            pass
+
+        # Override an existing method to change behavior
+        @BaseDatabaseApi.endpoint_jsonrpc
+        async def find_accounts(self, *, accounts: list[str]) -> Any:
+            # Custom implementation or call to parent
+            result = await super().find_accounts(accounts=accounts)
+            # Add custom processing
+            return result
+
+    # Create API collection with extended class
+    class MyApiCollection:
+        def __init__(self) -> None:
+            self.database_api = DatabaseApi
+
+    # Use the extended API
+    async def main():
+        wax = create_hive_chain()
+        extended_wax = wax.extends(MyApiCollection)
+
+        # Now you can use the custom method
+        config = await extended_wax.api.database_api.get_config()
+        print(f'Node config: {config}')
+
+    asyncio.run(main())
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The `@endpoint_jsonrpc` decorator automatically handles JSON-RPC communication. You only need to define the method signature.
+</Note>
+
+## Creating new API namespaces
+
+Define entirely new API namespaces for custom endpoints.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { AbstractApi } from '@hiveio/wax';
+
+    // Define a new API namespace
+    class BlockApi extends AbstractApi {
+      @AbstractApi.endpointJsonrpc
+      async get_block_header(args: { block_num: number }): Promise<any> {
+        // Implementation generated automatically
+      }
+
+      @AbstractApi.endpointJsonrpc
+      async get_block_range(args: {
+        starting_block_num: number;
+        count: number;
+      }): Promise<any> {}
+    }
+
+    // Create API collection with new namespace
+    class MyApiCollection {
+      block_api = BlockApi;
+    }
+
+    // Use the new API namespace
+    const wax = await createHiveChain();
+    const extendedWax = wax.extend(MyApiCollection);
+
+    const blockHeader = await extendedWax.api.block_api.get_block_header({
+      block_num: 123456
+    });
+
+    console.log('Block header:', blockHeader);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from typing import Any
+    from beekeepy.handle.remote import AbstractAsyncApi
+    from wax import create_hive_chain
+
+    # Define a new API namespace
+    # Class name must match the API namespace
+    class BlockApi(AbstractAsyncApi):
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_block_header(self, *, block_num: int) -> Any:
+            # Implementation generated automatically
+            pass
+
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_block_range(
+            self,
+            *,
+            starting_block_num: int,
+            count: int
+        ) -> Any:
+            pass
+
+    # Create API collection with new namespace
+    class MyApiCollection:
+        def __init__(self) -> None:
+            self.block_api = BlockApi
+
+    # Use the new API namespace
+    async def main():
+        wax = create_hive_chain()
+        extended_wax = wax.extends(MyApiCollection)
+
+        block_header = await extended_wax.api.block_api.get_block_header(
+            block_num=123456
+        )
+
+        print(f'Block header: {block_header}')
+
+    asyncio.run(main())
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  The class name must match the API namespace exactly. For example, `BlockApi` maps to the `block_api` JSON-RPC namespace.
+</Warning>
+
+## Combining multiple extensions
+
+You can extend multiple API namespaces in a single collection.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import {
+      DatabaseApi as BaseDatabaseApi,
+      AbstractApi
+    } from '@hiveio/wax';
+
+    // Extend existing API
+    class DatabaseApi extends BaseDatabaseApi {
+      @BaseDatabaseApi.endpointJsonrpc
+      async get_config(): Promise<any> {}
+    }
+
+    // Add new API
+    class BlockApi extends AbstractApi {
+      @AbstractApi.endpointJsonrpc
+      async get_block_header(args: { block_num: number }): Promise<any> {}
+    }
+
+    // Add another new API
+    class ReputationApi extends AbstractApi {
+      @AbstractApi.endpointJsonrpc
+      async get_account_reputations(args: {
+        account_lower_bound: string;
+        limit: number;
+      }): Promise<any> {}
+    }
+
+    // Combine all extensions
+    class MyFullApiCollection {
+      database_api = DatabaseApi;  // Extended
+      block_api = BlockApi;        // New
+      reputation_api = ReputationApi; // New
+    }
+
+    // Use all APIs
+    const wax = await createHiveChain();
+    const extended = wax.extend(MyFullApiCollection);
+
+    // Use extended database_api
+    const config = await extended.api.database_api.get_config();
+
+    // Use new block_api
+    const header = await extended.api.block_api.get_block_header({
+      block_num: 123
+    });
+
+    // Use new reputation_api
+    const reps = await extended.api.reputation_api.get_account_reputations({
+      account_lower_bound: "alice",
+      limit: 10
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from typing import Any
+    from beekeepy.handle.remote import AbstractAsyncApi
+    from wax import create_hive_chain
+    from wax.api.collection import DatabaseApi as BaseDatabaseApi
+
+    # Extend existing API
+    class DatabaseApi(BaseDatabaseApi):
+        @BaseDatabaseApi.endpoint_jsonrpc
+        async def get_config(self) -> Any:
+            pass
+
+    # Add new API
+    class BlockApi(AbstractAsyncApi):
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_block_header(self, *, block_num: int) -> Any:
+            pass
+
+    # Add another new API
+    class ReputationApi(AbstractAsyncApi):
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_account_reputations(
+            self,
+            *,
+            account_lower_bound: str,
+            limit: int
+        ) -> Any:
+            pass
+
+    # Combine all extensions
+    class MyFullApiCollection:
+        def __init__(self) -> None:
+            self.database_api = DatabaseApi
+            self.block_api = BlockApi
+            self.reputation_api = ReputationApi
+
+    # Use all APIs
+    async def main():
+        wax = create_hive_chain()
+        extended = wax.extends(MyFullApiCollection)
+
+        # Use extended database_api
+        config = await extended.api.database_api.get_config()
+
+        # Use new block_api
+        header = await extended.api.block_api.get_block_header(
+            block_num=123
+        )
+
+        # Use new reputation_api
+        reps = await extended.api.reputation_api.get_account_reputations(
+            account_lower_bound="alice",
+            limit=10
+        )
+
+    asyncio.run(main())
+    ```
+  </Tab>
+</Tabs>
+
+## Working with REST APIs
+
+You can also extend WAX to work with REST APIs instead of JSON-RPC.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+
+    // Define REST API methods
+    class CustomRestApi {
+      constructor(private baseUrl: string) {}
+
+      async getCustomData(id: string): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/data/${id}`);
+        return response.json();
+      }
+
+      async postCustomData(data: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/data`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        return response.json();
+      }
+    }
+
+    // Use with WAX
+    const wax = await createHiveChain();
+    const customApi = new CustomRestApi('https://api.example.com');
+
+    // Use alongside WAX APIs
+    const accounts = await wax.api.database_api.find_accounts({
+      accounts: ['alice']
+    });
+    const customData = await customApi.getCustomData('123');
+    ```
+  </Tab>
+</Tabs>
+
+## Type-safe API definitions
+
+Define interfaces for type safety.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { AbstractApi } from '@hiveio/wax';
+
+    // Define request/response types
+    interface GetBlockHeaderRequest {
+      block_num: number;
+    }
+
+    interface BlockHeader {
+      previous: string;
+      timestamp: string;
+      witness: string;
+      transaction_merkle_root: string;
+      extensions: any[];
+    }
+
+    interface GetBlockHeaderResponse {
+      header: BlockHeader;
+    }
+
+    // Use types in API definition
+    class BlockApi extends AbstractApi {
+      @AbstractApi.endpointJsonrpc
+      async get_block_header(
+        args: GetBlockHeaderRequest
+      ): Promise<GetBlockHeaderResponse> {}
+    }
+
+    // TypeScript will now enforce types
+    const result = await api.block_api.get_block_header({
+      block_num: 123
+    });
+    // result.header is typed as BlockHeader
+    console.log(result.header.witness);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from typing import TypedDict, Any
+    from beekeepy.handle.remote import AbstractAsyncApi
+
+    # Define request/response types
+    class BlockHeader(TypedDict):
+        previous: str
+        timestamp: str
+        witness: str
+        transaction_merkle_root: str
+        extensions: list[Any]
+
+    class GetBlockHeaderResponse(TypedDict):
+        header: BlockHeader
+
+    # Use types in API definition
+    class BlockApi(AbstractAsyncApi):
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_block_header(
+            self,
+            *,
+            block_num: int
+        ) -> GetBlockHeaderResponse:
+            pass
+
+    # Type checkers will now validate usage
+    result = await api.block_api.get_block_header(block_num=123)
+    # result["header"] is typed as BlockHeader
+    print(result["header"]["witness"])
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+Here's a complete example showing API extension in practice:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import {
+      DatabaseApi as BaseDatabaseApi,
+      AbstractApi
+    } from '@hiveio/wax';
+
+    // Extend DatabaseApi with custom method
+    class DatabaseApi extends BaseDatabaseApi {
+      @BaseDatabaseApi.endpointJsonrpc
+      async get_config(): Promise<any> {}
+    }
+
+    // Add new BlockApi
+    class BlockApi extends AbstractApi {
+      @AbstractApi.endpointJsonrpc
+      async get_block_header(args: { block_num: number }): Promise<any> {}
+    }
+
+    // Create API collection
+    class MyApiCollection {
+      database_api = DatabaseApi;
+      block_api = BlockApi;
+    }
+
+    // Main application
+    async function main() {
+      // Create base chain
+      const chain = await createHiveChain();
+      
+      // Extend with custom APIs
+      const wax = chain.extend(MyApiCollection);
+
+      // Use standard API
+      const accounts = await wax.api.database_api.find_accounts({
+        accounts: ['alice', 'bob']
+      });
+      console.log('Accounts:', accounts.accounts.length);
+
+      // Use extended database_api method
+      const config = await wax.api.database_api.get_config();
+      console.log('Node config:', config);
+
+      // Use new block_api
+      const header = await wax.api.block_api.get_block_header({
+        block_num: 12345
+      });
+      console.log('Block header:', header);
+
+      // Still can use chain methods
+      const tx = await wax.createTransaction();
+      tx.pushOperation({
+        vote_operation: {
+          voter: 'alice',
+          author: 'bob',
+          permlink: 'test-post',
+          weight: 10000
+        }
+      });
+    }
+
+    main().catch(console.error);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from typing import Any
+    from beekeepy.handle.remote import AbstractAsyncApi
+    from wax import create_hive_chain
+    from wax.api.collection import DatabaseApi as BaseDatabaseApi
+    from wax.proto.operations import vote
+
+    # Extend DatabaseApi with custom method
+    class DatabaseApi(BaseDatabaseApi):
+        @BaseDatabaseApi.endpoint_jsonrpc
+        async def get_config(self) -> Any:
+            pass
+
+    # Add new BlockApi
+    class BlockApi(AbstractAsyncApi):
+        @AbstractAsyncApi.endpoint_jsonrpc
+        async def get_block_header(self, *, block_num: int) -> Any:
+            pass
+
+    # Create API collection
+    class MyApiCollection:
+        def __init__(self) -> None:
+            self.database_api = DatabaseApi
+            self.block_api = BlockApi
+
+    # Main application
+    async def main():
+        # Create base chain
+        chain = create_hive_chain()
+        
+        # Extend with custom APIs
+        wax = chain.extends(MyApiCollection)
+
+        # Use standard API
+        accounts = await wax.api.database_api.find_accounts(
+            accounts=['alice', 'bob']
+        )
+        print(f'Accounts: {len(accounts.accounts)}')
+
+        # Use extended database_api method
+        config = await wax.api.database_api.get_config()
+        print(f'Node config: {config}')
+
+        # Use new block_api
+        header = await wax.api.block_api.get_block_header(block_num=12345)
+        print(f'Block header: {header}')
+
+        # Still can use chain methods
+        tx = await wax.create_transaction()
+        tx.push_operation(
+            vote(
+                voter='alice',
+                author='bob',
+                permlink='test-post',
+                weight=10000
+            )
+        )
+
+    asyncio.run(main())
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use typed interfaces for better development experience">
+    Define TypeScript interfaces or Python TypedDicts for request and response types.
+
+    ```typescript
+    interface MyRequest {
+      param1: string;
+      param2: number;
+    }
+
+    interface MyResponse {
+      result: string;
+    }
+
+    async myMethod(args: MyRequest): Promise<MyResponse> {}
+    ```
+  </Accordion>
+
+  <Accordion title="Keep extension classes organized">
+    Group related API extensions together and use meaningful names.
+
+    ```typescript
+    // Good organization
+    class EnhancedDatabaseApi extends DatabaseApi { ... }
+    class CustomAnalyticsApi extends AbstractApi { ... }
+    class CustomNotificationApi extends AbstractApi { ... }
+
+    class MyApiCollection {
+      database_api = EnhancedDatabaseApi;
+      analytics_api = CustomAnalyticsApi;
+      notification_api = CustomNotificationApi;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Match API namespace naming conventions">
+    API class names must match the exact JSON-RPC namespace with snake_case converted to PascalCase.
+
+    ```typescript
+    // Correct
+    class BlockApi { }        // Maps to block_api
+    class DatabaseApi { }     // Maps to database_api
+    class ReputationApi { }   // Maps to reputation_api
+
+    // Incorrect
+    class Block { }           // Won't map correctly
+    class DB_Api { }          // Wrong naming
+    ```
+  </Accordion>
+
+  <Accordion title="Test API extensions thoroughly">
+    Ensure your custom endpoints work correctly with different parameters.
+
+    ```typescript
+    // Test with various inputs
+    const tests = [
+      { block_num: 1 },
+      { block_num: 12345 },
+      { block_num: 99999999 }
+    ];
+
+    for (const test of tests) {
+      try {
+        const result = await api.block_api.get_block_header(test);
+        console.log('✓ Test passed:', test);
+      } catch (error) {
+        console.error('✗ Test failed:', test, error);
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Formatters" icon="paintbrush" href="/guides/formatters">
+    Learn how to format API responses for display
+  </Card>
+  <Card title="API reference" icon="code" href="/api/hive/database-api">
+    Explore available Hive API endpoints
+  </Card>
+  <Card title="Custom operations" icon="puzzle-piece" href="/guides/complex-operations">
+    Create custom complex operations
+  </Card>
+  <Card title="TypeScript SDK" icon="code" href="/typescript/api-calls">
+    Full guide to making API calls
+  </Card>
+</CardGroup>

@@ -1,0 +1,467 @@
+---
+title: Using createWaxFoundation
+description: Build and sign transactions offline with createWaxFoundation
+---
+
+The `createWaxFoundation()` function creates a WAX instance for offline operations. You can build, sign, validate, and serialize transactions without connecting to the Hive network.
+
+## When to use createWaxFoundation
+
+Use `createWaxFoundation()` when you need:
+
+- **Offline transaction building** - Construct transactions without network access
+- **Transaction signing** - Sign transactions with private keys or wallet integrations
+- **Cryptographic operations** - Generate keys, encrypt data, and calculate signatures
+- **Transaction validation** - Verify transaction structure before broadcasting
+- **Lightweight applications** - Minimize bundle size by excluding API functionality
+
+For network operations, use [`createHiveChain()`](/typescript/hive-chain) instead.
+
+## Creating a foundation instance
+
+Basic initialization:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+```
+
+With custom chain ID:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation({
+  chainId: "42000000000000000000000000000000000000000000000000000000000000" // Testnet
+});
+```
+
+## Interface reference
+
+The `IWaxBaseInterface` provides these capabilities:
+
+```typescript
+interface IWaxBaseInterface {
+  // Core properties
+  readonly chainId: string;
+  readonly addressPrefix: string;
+  readonly ASSETS: Record<string, NaiAsset>;
+  readonly config: IChainConfig;
+  readonly formatter: IWaxExtendableFormatter;
+  readonly waxify: IWaxExtendableFormatter['waxify'];
+
+  // Transaction methods
+  createTransactionWithTaPoS(taposBlockId: string, expirationTime?: string | Date | number): ITransaction;
+  createTransactionFromJson(transactionData: string | object): ITransaction;
+  createTransactionFromLegacyJson(transactionData: string | object): ITransaction;
+  createTransactionFromProto(protoTransaction: transaction): ITransaction;
+  convertTransactionToBinaryForm(transaction: ApiTransaction, stripSignatures?: boolean): string;
+  convertTransactionFromBinaryForm(hexString: string): ApiTransaction;
+
+  // Asset methods
+  hiveCoins(amount: number): NaiAsset;
+  hbdCoins(amount: number): NaiAsset;
+  vestsCoins(amount: number): NaiAsset;
+  hiveSatoshis(amount: number | string | bigint): NaiAsset;
+  hbdSatoshis(amount: number | string | bigint): NaiAsset;
+  vestsSatoshis(amount: number | string | bigint): NaiAsset;
+  getAsset(nai: NaiAsset): { amount: string; symbol: string };
+
+  // Conversion methods
+  vestsToHp(vests: NaiAsset, totalVestingFundHive: NaiAsset, totalVestingShares: NaiAsset): NaiAsset;
+  hpToVests(hive: NaiAsset, totalVestingFundHive: NaiAsset, totalVestingShares: NaiAsset): NaiAsset;
+  hbdToHive(hbd: NaiAsset, base: NaiAsset, quote: NaiAsset): NaiAsset;
+  hiveToHbd(hive: NaiAsset, base: NaiAsset, quote: NaiAsset): NaiAsset;
+
+  // Calculation methods
+  calculateCurrentManabarValue(now: number, maxMana: number | string | bigint, currentMana: number | string | bigint, lastUpdateTime: number): IManabarData;
+  calculateManabarFullRegenerationTime(now: number, maxMana: number | string | bigint, currentMana: number | string | bigint, lastUpdateTime: number): number;
+  calculateAccountHp(vests: NaiAsset, totalVestingFundHive: NaiAsset, totalVestingShares: NaiAsset): NaiAsset;
+  calculateWitnessVotesHp(votes: NaiAsset, totalVestingFundHive: NaiAsset, totalVestingShares: NaiAsset): NaiAsset;
+  calculateHpApr(headBlockNum: number, vestingRewardPercent: number, virtualSupply: NaiAsset, totalVestingFundHive: NaiAsset): number;
+  estimateHiveCollateral(currentMedianHistoryBase: NaiAsset, currentMedianHistoryQuote: NaiAsset, currentMinHistoryBase: NaiAsset, currentMinHistoryQuote: NaiAsset, hbdAmountToGet: NaiAsset): NaiAsset;
+  estimateHbdInterest(accountHdbSeconds: number | string | bigint, hbdBalance: NaiAsset, lastCompoundingDate: Date | number | string, now: Date | number | string, interestRate: number): NaiAsset;
+
+  // Cryptographic methods
+  suggestBrainKey(): { brainKey: string; wifPrivateKey: string; associatedPublicKey: string };
+  getPrivateKeyFromPassword(account: string, role: string, password: string): { wifPrivateKey: string; associatedPublicKey: string };
+  calculatePublicKey(wifPrivateKey: string): string;
+  convertRawPrivateKeyToWif(rawPrivateKey: string): string;
+  convertRawPublicKeyToWif(rawPublicKey: string): string;
+  getPublicKeyFromSignature(sigDigest: string, signature: string): string;
+
+  // Validation methods
+  isValidAccountName(name: string): boolean;
+  operationGetImpactedAccounts(operation: operation): Set<string>;
+  operationBinaryViewMetadata(operation: operation, isHf26Serialization?: boolean): IBinaryViewOutputData;
+
+  // Utility methods
+  getVersion(): string;
+  extendConfig(config: IWaxBaseExtendibleOptions): IWaxBaseInterface;
+  delete(): void;
+}
+```
+
+## Building transactions offline
+
+Create a transaction with TaPoS (Transaction as Proof of Stake):
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+
+// You need a recent block ID from the network
+const headBlockId = "0129d3f75e53c4c8e35b52548f5f2e45b3e0c8b3";
+
+const tx = wax.createTransactionWithTaPoS(headBlockId, "+1h");
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+
+console.log(tx.transaction);
+```
+
+Expiration time formats:
+
+```typescript
+// Relative time (recommended)
+tx = wax.createTransactionWithTaPoS(blockId, "+1h");   // 1 hour from now
+tx = wax.createTransactionWithTaPoS(blockId, "+30m");  // 30 minutes
+tx = wax.createTransactionWithTaPoS(blockId, "+120s"); // 120 seconds
+
+// Absolute time
+tx = wax.createTransactionWithTaPoS(blockId, new Date("2024-12-31T23:59:59Z"));
+tx = wax.createTransactionWithTaPoS(blockId, "2024-12-31T23:59:59Z");
+tx = wax.createTransactionWithTaPoS(blockId, 1704067199000); // Unix timestamp in milliseconds
+```
+
+## Working with assets
+
+### Creating assets
+
+Use precision-aware methods for fractional amounts:
+
+```typescript
+const hive = wax.hiveCoins(100);        // { nai: "@@000000021", amount: "100000", precision: 3 }
+const hbd = wax.hbdCoins(50.5);         // { nai: "@@000000013", amount: "50500", precision: 3 }
+const vests = wax.vestsCoins(1000.5);   // { nai: "@@000000037", amount: "1000500000", precision: 6 }
+```
+
+Use satoshi methods for large integer values:
+
+```typescript
+const largeHive = wax.hiveSatoshis("999999999999999");  // No precision conversion
+const largeHbd = wax.hbdSatoshis(BigInt("999999999999999"));
+const largeVests = wax.vestsSatoshis(999999999999999);
+```
+
+### Reading assets
+
+Convert NAI format to readable form:
+
+```typescript
+const asset = wax.hiveCoins(123.456);
+const { amount, symbol } = wax.getAsset(asset);
+
+console.log(`${amount} ${symbol}`); // "123.456 HIVE"
+```
+
+### Asset conversions
+
+Convert between VESTS and HP:
+
+```typescript
+// You need these values from the network (get_dynamic_global_properties)
+const totalVestingFundHive = wax.hiveCoins(420000000);
+const totalVestingShares = wax.vestsCoins(430000000);
+
+// Convert VESTS to HP
+const vests = wax.vestsCoins(1000000);
+const hp = wax.vestsToHp(vests, totalVestingFundHive, totalVestingShares);
+
+// Convert HP to VESTS
+const hiveAmount = wax.hiveCoins(1000);
+const vestsAmount = wax.hpToVests(hiveAmount, totalVestingFundHive, totalVestingShares);
+```
+
+Convert between HIVE and HBD:
+
+```typescript
+// You need current price feed
+const base = wax.hbdCoins(1);    // Price feed base (HBD)
+const quote = wax.hiveCoins(0.5); // Price feed quote (HIVE per HBD)
+
+// Convert HBD to HIVE
+const hbd = wax.hbdCoins(100);
+const hive = wax.hbdToHive(hbd, base, quote);
+
+// Convert HIVE to HBD
+const hiveAmount = wax.hiveCoins(50);
+const hbdAmount = wax.hiveToHbd(hiveAmount, base, quote);
+```
+
+## Cryptographic operations
+
+### Generate brain key
+
+Create a secure brain key for account creation:
+
+```typescript
+const { brainKey, wifPrivateKey, associatedPublicKey } = wax.suggestBrainKey();
+
+console.log(`Brain key: ${brainKey}`);
+console.log(`Private key: ${wifPrivateKey}`);
+console.log(`Public key: ${associatedPublicKey}`);
+```
+
+### Derive keys from password
+
+Generate role-specific keys from a master password:
+
+```typescript
+const account = "alice";
+const password = "MySecurePassword123";
+
+const ownerKey = wax.getPrivateKeyFromPassword(account, "owner", password);
+const activeKey = wax.getPrivateKeyFromPassword(account, "active", password);
+const postingKey = wax.getPrivateKeyFromPassword(account, "posting", password);
+const memoKey = wax.getPrivateKeyFromPassword(account, "memo", password);
+
+console.log(`Owner public key: ${ownerKey.associatedPublicKey}`);
+console.log(`Active public key: ${activeKey.associatedPublicKey}`);
+```
+
+### Calculate public key
+
+Derive a public key from a private key:
+
+```typescript
+const wifPrivateKey = "5JWcdkhS...";
+const publicKey = wax.calculatePublicKey(wifPrivateKey);
+
+console.log(publicKey); // "STM8ZSw..."
+```
+
+### Convert raw keys
+
+Convert raw hex keys to WIF format:
+
+```typescript
+// Convert raw private key (64 hex characters)
+const rawPrivateKey = "abcdef1234567890...";
+const wifPrivate = wax.convertRawPrivateKeyToWif(rawPrivateKey);
+
+// Convert raw public key (66 or 130 hex characters)
+const rawPublicKey = "02abcdef1234567890...";
+const wifPublic = wax.convertRawPublicKeyToWif(rawPublicKey);
+```
+
+## Calculations
+
+### Calculate manabar
+
+Get current manabar value and percentage:
+
+```typescript
+// Values from find_accounts and get_dynamic_global_properties
+const now = 1704067199; // Head block time
+const maxMana = "1000000000"; // post_voting_power.amount
+const currentMana = "800000000"; // voting_manabar.current_mana
+const lastUpdateTime = 1704060000; // voting_manabar.last_update_time
+
+const manabar = wax.calculateCurrentManabarValue(now, maxMana, currentMana, lastUpdateTime);
+
+console.log(`Current: ${manabar.current}`);
+console.log(`Max: ${manabar.max}`);
+console.log(`Percentage: ${manabar.percent}%`);
+```
+
+Calculate full regeneration time:
+
+```typescript
+const regenTime = wax.calculateManabarFullRegenerationTime(now, maxMana, currentMana, lastUpdateTime);
+const regenDate = new Date(regenTime * 1000);
+
+console.log(`Full regeneration: ${regenDate}`);
+```
+
+### Calculate HP APR
+
+Calculate current Hive Power APR:
+
+```typescript
+// Values from get_dynamic_global_properties
+const headBlockNum = 87654321;
+const vestingRewardPercent = 5000; // 50.00%
+const virtualSupply = wax.hiveCoins(500000000);
+const totalVestingFundHive = wax.hiveCoins(420000000);
+
+const apr = wax.calculateHpApr(headBlockNum, vestingRewardPercent, virtualSupply, totalVestingFundHive);
+
+console.log(`HP APR: ${apr.toFixed(2)}%`);
+```
+
+### Estimate HBD interest
+
+Calculate HBD savings interest:
+
+```typescript
+const accountHdbSeconds = "86400000000"; // From savings_hbd_seconds
+const hbdBalance = wax.hbdCoins(1000);
+const lastCompoundingDate = "2024-01-01T00:00:00Z"; // From savings_hbd_seconds_last_update
+const now = "2024-12-31T23:59:59Z"; // From get_dynamic_global_properties time
+const interestRate = 1500; // 15.00% from hbd_interest_rate
+
+const interest = wax.estimateHbdInterest(accountHdbSeconds, hbdBalance, lastCompoundingDate, now, interestRate);
+
+const { amount, symbol } = wax.getAsset(interest);
+console.log(`Estimated interest: ${amount} ${symbol}`);
+```
+
+## Transaction operations
+
+### Get transaction ID
+
+Calculate the transaction hash:
+
+```typescript
+const tx = wax.createTransactionWithTaPoS(blockId);
+tx.pushOperation({ /* ... */ });
+
+const txId = tx.id; // HF26 serialization
+const legacyTxId = tx.legacy_id; // Legacy serialization (deprecated)
+
+console.log(`Transaction ID: ${txId}`);
+```
+
+### Get signature digest
+
+Get the digest for signing:
+
+```typescript
+const sigDigest = tx.sigDigest; // HF26 serialization
+const legacySigDigest = tx.legacy_sigDigest; // Legacy serialization (deprecated)
+
+console.log(`Signature digest: ${sigDigest}`);
+```
+
+### Validate transaction
+
+Check transaction structure:
+
+```typescript
+try {
+  tx.validate();
+  console.log("Transaction is valid");
+} catch (error) {
+  console.error("Validation error:", error.message);
+}
+```
+
+### Convert to API format
+
+Convert transaction to Hive API format:
+
+```typescript
+const apiJson = tx.toApiJson(); // HF26 format (recommended)
+const legacyJson = tx.toLegacyApi(); // Legacy format (deprecated)
+
+console.log(JSON.stringify(apiJson, null, 2));
+```
+
+### Binary serialization
+
+Convert transaction to binary form:
+
+```typescript
+const binary = tx.toBinaryForm(); // With signatures
+const unsignedBinary = tx.toBinaryForm(true); // Without signatures
+
+console.log(`Binary: ${binary}`);
+```
+
+## Validation utilities
+
+### Validate account names
+
+Check if an account name is valid:
+
+```typescript
+if (wax.isValidAccountName("alice")) {
+  console.log("Valid account name");
+}
+
+if (!wax.isValidAccountName("Invalid-Name")) {
+  console.log("Invalid account name");
+}
+```
+
+### Get impacted accounts
+
+Find accounts affected by an operation:
+
+```typescript
+const operation = {
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+};
+
+const accounts = wax.operationGetImpactedAccounts(operation);
+console.log([...accounts]); // ["alice", "bob"]
+```
+
+## Configuration
+
+### Extend configuration
+
+Create a new instance with different settings:
+
+```typescript
+const wax = await createWaxFoundation({
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000"
+});
+
+// Create testnet instance
+const testnetWax = wax.extendConfig({
+  chainId: "42000000000000000000000000000000000000000000000000000000000000"
+});
+
+console.log(wax.chainId);        // Mainnet chain ID
+console.log(testnetWax.chainId); // Testnet chain ID
+```
+
+## Memory management
+
+Clean up the WASM instance when done:
+
+```typescript
+const wax = await createWaxFoundation();
+
+// Use wax...
+
+// Clean up
+wax.delete();
+```
+
+Note: You rarely need to call `delete()` explicitly. JavaScript garbage collection handles cleanup automatically in most cases.
+
+## Next steps
+
+Explore more WAX capabilities:
+
+- Use [createHiveChain](/typescript/hive-chain) for online operations
+- Build and sign [transactions](/typescript/transactions)
+- Learn about [API calls](/typescript/api-calls)
+- Study [working examples](/typescript/examples)

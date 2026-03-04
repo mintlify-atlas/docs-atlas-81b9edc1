@@ -1,0 +1,162 @@
+---
+title: Overview
+description: Introduction to the Python SDK for building Hive blockchain applications
+---
+
+The WAX Python SDK provides a comprehensive toolkit for building Hive blockchain applications in Python. It wraps the core C++ Hive protocol implementation with a high-level, Pythonic API.
+
+## Key features
+
+The Python SDK offers two main interfaces:
+
+- **Offline operations** via `create_wax_foundation()` - Transaction building, signing, and validation without network access
+- **Online operations** via `create_hive_chain()` - Full blockchain interaction including API calls and broadcasting
+
+## Core capabilities
+
+### Transaction management
+
+Build, sign, validate, and broadcast transactions with full type safety:
+
+```python
+from wax import create_hive_chain
+from wax.proto.operations import transfer
+
+wax = create_hive_chain()
+tx = await wax.create_transaction()
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+)
+```
+
+### Asset handling
+
+Work with HIVE, HBD, and VESTS using intuitive asset factories:
+
+```python
+# Create assets
+hive_amount = wax.hive.satoshis(1000)  # 0.001 HIVE
+hbd_amount = wax.hbd.pretty("5.000 HBD")
+vests_amount = wax.vests.nai({"amount": "1000000", "precision": 6, "nai": "@@000000037"})
+
+# Convert between asset types
+hp = wax.vests_to_hp(
+    vests=account_vests,
+    total_vesting_fund_hive=dgpo.total_vesting_fund_hive,
+    total_vesting_shares=dgpo.total_vesting_shares
+)
+```
+
+### API integration
+
+Access Hive blockchain APIs with full async support:
+
+```python
+# Query blockchain data
+accounts = await wax.api.database_api.find_accounts(
+    accounts=["alice", "bob"]
+)
+
+# Get dynamic global properties
+dgpo = await wax.api.database_api.get_dynamic_global_properties()
+
+# Query resource credits
+rc_accounts = await wax.api.rc_api.find_rc_accounts(
+    accounts=["alice"]
+)
+```
+
+### Wallet integration
+
+Seamless integration with Beekeeper wallet for secure key management:
+
+```python
+from beekeepy import AsyncBeekeeper
+
+async with await AsyncBeekeeper.factory() as beekeeper:
+    session = await beekeeper.create_session(salt="")
+    wallet = await session.create_wallet(name="my_wallet", password="password")
+    await tx.sign(wallet=wallet, public_key="STM...")
+```
+
+## Installation
+
+Install the SDK via pip:
+
+```bash
+pip install hiveio-wax
+```
+
+See the [installation guide](/python/installation) for detailed setup instructions.
+
+## Getting started
+
+Choose your approach based on your needs:
+
+<CardGroup cols={2}>
+  <Card title="Offline operations" icon="plug" href="/python/wax-foundation">
+    Build and sign transactions without network access
+  </Card>
+  <Card title="Online operations" icon="globe" href="/python/hive-chain">
+    Full blockchain interaction with API calls
+  </Card>
+  <Card title="Transactions" icon="file-lines" href="/python/transactions">
+    Learn transaction building and management
+  </Card>
+  <Card title="API calls" icon="server" href="/python/api-calls">
+    Query blockchain data and state
+  </Card>
+</CardGroup>
+
+## Architecture
+
+The Python SDK uses Cython bindings to wrap the high-performance C++ Hive protocol implementation. This provides:
+
+- **Native performance** - Transaction signing and validation at C++ speeds
+- **Type safety** - Full type hints and Protocol Buffer message validation
+- **Protocol compliance** - Direct use of Hive's canonical protocol implementation
+
+## Package structure
+
+```python
+from wax import (
+    create_wax_foundation,  # Offline operations factory
+    create_hive_chain,      # Online operations factory
+    WaxOptions,             # Configuration for offline mode
+    WaxChainOptions,        # Configuration for online mode
+)
+
+from wax.proto.operations import (  # Protocol Buffer operations
+    transfer,
+    vote,
+    comment,
+    # ... all Hive operations
+)
+
+from wax.complex_operations import (  # High-level operation builders
+    AccountAuthorityUpdateOperation,
+    RecurrentTransferOperation,
+)
+```
+
+## Next steps
+
+<Steps>
+  <Step title="Install the SDK">
+    Follow the [installation guide](/python/installation) to set up your environment
+  </Step>
+  <Step title="Choose your interface">
+    Use [create_wax_foundation](/python/wax-foundation) for offline operations or [create_hive_chain](/python/hive-chain) for full blockchain access
+  </Step>
+  <Step title="Build transactions">
+    Learn [transaction management](/python/transactions) to create and sign operations
+  </Step>
+  <Step title="Explore examples">
+    Check out [complete examples](/python/examples) for common use cases
+  </Step>
+</Steps>

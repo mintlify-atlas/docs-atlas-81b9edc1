@@ -1,0 +1,419 @@
+---
+title: Contributing guidelines
+description: Learn how to contribute to the WAX project
+---
+
+We welcome contributions to WAX! This guide will help you get started.
+
+## Workflow compliance
+
+All contributions must follow the established workflow rules from the [hive/hive](https://gitlab.syncad.com/hive/hive) repository.
+
+### Required reading
+
+<CardGroup cols={3}>
+  <Card title="General workflow" icon="workflow" href="https://gitlab.syncad.com/hive/hive/-/blob/develop/GENERAL_CLAUDE_WORKFLOW.md">
+    Claude-specific workflow rules
+  </Card>
+  <Card title="Git guidelines" icon="git-alt" href="https://gitlab.syncad.com/hive/hive/-/blob/develop/doc/git-guidelines.md">
+    Branching and merge requests
+  </Card>
+  <Card title="Contributing guide" icon="book" href="https://gitlab.syncad.com/hive/hive/-/blob/develop/CONTRIBUTING.md">
+    Bug reports and enhancements
+  </Card>
+</CardGroup>
+
+### Key requirements
+
+<Steps>
+  <Step title="Create draft merge requests">
+    Always create MRs as **Draft** until maintainer approval.
+  </Step>
+  
+  <Step title="Build and test locally">
+    Build and test locally **before pushing** changes.
+    
+    ```bash
+    # Python
+    ./python/wax/scripts/build_wax.sh
+    ./python/tests/wax/run_tests.sh
+    
+    # TypeScript
+    cd ts
+    pnpm run build
+    pnpm run test
+    ```
+  </Step>
+  
+  <Step title="Monitor pipeline">
+    Monitor pipeline after push and fix failures promptly.
+  </Step>
+  
+  <Step title="Keep commits atomic">
+    Keep commits atomic. Use fixup commits for review feedback.
+  </Step>
+  
+  <Step title="Rebase before merge">
+    Follow fast-forward merge strategy - rebase before merge.
+  </Step>
+</Steps>
+
+<Warning>
+  All CI jobs must pass. Marking jobs as `allow_failure` is not permitted.
+</Warning>
+
+## Development setup
+
+### Prerequisites
+
+- **Git**: Version control
+- **Python 3.12+**: For Python development
+- **Node.js 20.11+**: For TypeScript development
+- **Poetry 2.1.3**: Python dependency management
+- **pnpm**: TypeScript package manager
+- **Protobuf compiler**: For protocol buffer generation
+
+### Clone the repository
+
+```bash
+git clone https://gitlab.syncad.com/hive/wax.git
+cd wax
+
+# Initialize submodules
+git submodule update --init --recursive
+```
+
+### Set up Python development
+
+```bash
+# Install Poetry
+curl -sSL https://install.python-poetry.org | python3 - --version 2.1.3
+
+# Create virtual environment
+cd python/wax
+poetry env use python3.12
+
+# Install dependencies
+poetry install
+
+# Build WAX
+../../python/wax/scripts/build_wax.sh
+```
+
+### Set up TypeScript development
+
+```bash
+# Install pnpm (if not already installed)
+npm install -g pnpm
+
+# Install dependencies
+cd ts
+pnpm install
+
+# Build WAX
+pnpm run build
+```
+
+## Making changes
+
+### Branching strategy
+
+Create a feature branch from `develop`:
+
+```bash
+git checkout develop
+git pull
+git checkout -b feature/your-feature-name
+```
+
+### Code style
+
+#### Python
+
+- Follow PEP 8 style guidelines
+- Use Ruff for linting
+- Use MyPy for type checking
+- Maximum line length: 120 characters
+
+```bash
+# Run linters
+poetry run ruff check .
+poetry run mypy .
+
+# Auto-fix issues
+poetry run ruff check --fix .
+```
+
+#### TypeScript
+
+- Follow project ESLint configuration
+- Use TypeScript strict mode
+- Document public APIs with JSDoc comments
+
+```bash
+# Run linter
+pnpm run lint
+```
+
+### Running tests
+
+Always run tests before committing:
+
+```bash
+# Python tests
+./python/tests/wax/run_tests.sh
+
+# TypeScript tests
+cd ts
+pnpm run test
+```
+
+### Commit messages
+
+Write clear, descriptive commit messages:
+
+```
+feat: add support for custom API endpoints
+
+Implement extend() method for HiveChain to allow custom
+API endpoint registration. Includes tests and documentation.
+
+Closes #123
+```
+
+Commit message format:
+
+- **feat**: New feature
+- **fix**: Bug fix
+- **docs**: Documentation changes
+- **test**: Test additions or changes
+- **refactor**: Code refactoring
+- **perf**: Performance improvements
+- **chore**: Build process or auxiliary tool changes
+
+## Submitting changes
+
+### Create a merge request
+
+1. Push your branch to GitLab:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+2. Create a merge request on GitLab
+3. Mark it as **Draft** initially
+4. Fill in the MR template with:
+   - Description of changes
+   - Testing performed
+   - Related issues
+
+### MR checklist
+
+<Steps>
+  <Step title="All tests pass locally">
+    Run full test suite and verify all tests pass.
+  </Step>
+  
+  <Step title="Linters pass">
+    Run linters and fix all issues.
+  </Step>
+  
+  <Step title="Documentation updated">
+    Update documentation for any API changes.
+  </Step>
+  
+  <Step title="Examples work">
+    If applicable, update examples to demonstrate new features.
+  </Step>
+  
+  <Step title="CI pipeline passes">
+    Monitor the CI pipeline and fix any failures.
+  </Step>
+</Steps>
+
+### Review process
+
+1. Wait for maintainer review
+2. Address review feedback
+3. Use fixup commits for review changes:
+   ```bash
+   git commit --fixup HEAD
+   ```
+4. Once approved, maintainer will remove **Draft** status
+5. Rebase and squash before merge:
+   ```bash
+   git rebase -i develop
+   git push --force-with-lease
+   ```
+
+## Development guidelines
+
+### Architecture
+
+Understand the codebase structure:
+
+- **core/**: Common C++ code shared by Python and TypeScript
+  - Tightly integrated with hive submodule
+  - Uses `libraries/protocol` and `libraries/fc`
+  - Avoid deep scanning during analysis
+
+- **python/**: Python implementation
+  - Cython bindings in `wax/cpp_python_bridge.pyx`
+  - Public API in `wax/__init__.py`
+  - Internal implementation in `wax/_private/`
+
+- **ts/**: TypeScript implementation
+  - WASM compilation from C++
+  - Minimize final NPM package size
+  - Core in `wasm/lib/detailed/`
+
+### Protocol buffers
+
+Protocol buffers are generated from `hive/libraries/protocol/proto/`:
+
+- **TypeScript**: Generated to `ts/wasm/lib/proto/` via `ts-proto`
+- **Python**: Generated to `python/wax/_private/proto/` via `grpcio-tools`
+
+Pattern files track expected output:
+
+- `ts/protobuf_patterns/`: TypeScript patterns
+- `python/protobuf_patterns/`: Python patterns
+
+### Testing guidelines
+
+#### Write tests for new features
+
+- Add unit tests for new functions/methods
+- Add integration tests for complex features
+- Ensure tests are deterministic
+
+#### Use the mock server
+
+For API-related tests, use the provided mock server:
+
+```python
+# Python
+@pytest.fixture
+def hive_chain(proxy_mock_server_endpoint):
+    return create_hive_chain(proxy_mock_server_endpoint)
+```
+
+```typescript
+// TypeScript
+const chain = await createHiveChain(mockServerEndpoint);
+```
+
+#### Test coverage
+
+Aim for high test coverage:
+
+- Unit tests for core functionality
+- Integration tests for API calls
+- End-to-end tests for complete workflows
+
+## Documentation
+
+### Updating documentation
+
+When adding new features:
+
+1. Update API reference documentation
+2. Add usage examples
+3. Update guides if applicable
+4. Add changelog entry
+
+### Python docstrings
+
+Use Google-style docstrings:
+
+```python
+def create_transaction(operations: list) -> Transaction:
+    """Create a new transaction with the given operations.
+    
+    Args:
+        operations: List of operations to include in the transaction.
+        
+    Returns:
+        A new Transaction object.
+        
+    Raises:
+        ValueError: If operations list is empty.
+    """
+```
+
+### TypeScript JSDoc
+
+Document public APIs:
+
+```typescript
+/**
+ * Create a new transaction with the given operations.
+ * 
+ * @param operations - List of operations to include
+ * @returns A new Transaction object
+ * @throws {Error} If operations list is empty
+ */
+function createTransaction(operations: Operation[]): Transaction {
+  // ...
+}
+```
+
+## Common contribution types
+
+### Adding a new operation
+
+1. Define operation in protocol buffers (if not already defined)
+2. Implement in both Python and TypeScript
+3. Add tests for the operation
+4. Add example usage
+5. Update documentation
+
+### Adding a new API endpoint
+
+1. Extend the API interface
+2. Implement the endpoint call
+3. Add response type definitions
+4. Add tests
+5. Document the new endpoint
+
+### Fixing a bug
+
+1. Write a failing test that reproduces the bug
+2. Fix the bug
+3. Verify the test passes
+4. Add regression test
+5. Document the fix in changelog
+
+## Getting help
+
+<CardGroup cols={2}>
+  <Card title="GitLab issues" icon="gitlab" href="https://gitlab.syncad.com/hive/wax/-/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Discussions" icon="comments" href="https://gitlab.syncad.com/hive/wax/-/discussions">
+    Ask questions and discuss ideas
+  </Card>
+</CardGroup>
+
+### Contact maintainers
+
+For questions about contributing:
+
+- Open a discussion on GitLab
+- Comment on related issues
+- Tag maintainers in merge requests
+
+## License
+
+By contributing to WAX, you agree that your contributions will be licensed under the project's license. See [LICENSE.md](https://gitlab.syncad.com/hive/wax/-/blob/develop/LICENSE.md) for details.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Building from source" icon="hammer" href="/resources/building">
+    Learn how to build WAX
+  </Card>
+  <Card title="Running tests" icon="flask" href="/resources/testing">
+    Run tests and examples
+  </Card>
+</CardGroup>

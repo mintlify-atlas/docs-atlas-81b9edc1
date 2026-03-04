@@ -1,0 +1,725 @@
+---
+title: "Complex operations"
+description: "Using complex operations for voting, transfers, account updates, and more"
+---
+
+Complex operations are high-level wrappers that simplify creating sophisticated blockchain operations. They handle the complexity of building protocol buffer messages and provide intuitive APIs.
+
+## What are complex operations?
+
+Complex operations extend the base `OperationBase` class and provide:
+
+- **Type-safe APIs** - IntelliSense and autocomplete support
+- **Automatic validation** - Built-in checks for valid data
+- **Simplified workflows** - Handle common patterns automatically
+- **Protocol compliance** - Ensure operations match blockchain requirements
+
+<Note>
+  Complex operations implement a `finalize()` method that converts high-level data into protocol buffer operations when you push them to a transaction.
+</Note>
+
+## Account update operations
+
+Update account authorities (owner, active, posting) and memo keys.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { AccountAuthorityUpdateOperation } from '@hiveio/wax';
+
+    async function updateAccount() {
+      const chain = await createHiveChain();
+
+      // Create operation - automatically retrieves current account data
+      const accountUpdate = await AccountAuthorityUpdateOperation.createFor(
+        chain,
+        "alice"
+      );
+
+      // Update posting authority - add a new account
+      accountUpdate.roles.posting.add("bob", 1);
+
+      // Update active authority - add a new key
+      accountUpdate.roles.active.add(
+        "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+        1
+      );
+
+      // Update memo key
+      accountUpdate.roles.memo.set(
+        "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU"
+      );
+
+      // Add to transaction
+      const tx = await chain.createTransaction();
+      tx.pushOperation(accountUpdate);
+
+      console.log('Account update ready to sign');
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.complex_operations.account_update import AccountAuthorityUpdateOperation
+
+    async def update_account():
+        chain = create_hive_chain()
+
+        # Create operation - automatically retrieves current account data
+        account_update = await AccountAuthorityUpdateOperation.create_for(
+            chain,
+            "alice"
+        )
+
+        # Update posting authority - add a new account
+        account_update.roles.posting.add("bob", 1)
+
+        # Update active authority - add a new key
+        account_update.roles.active.add(
+            "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+            1
+        )
+
+        # Update memo key
+        account_update.roles.memo.set(
+            "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU"
+        )
+
+        # Add to transaction
+        tx = await chain.create_transaction()
+        tx.push_operation(account_update)
+
+        print('Account update ready to sign')
+
+    asyncio.run(update_account())
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  The `create_for()` method automatically fetches current account authorities from the blockchain, making it easy to modify existing permissions.
+</Info>
+
+### Working with authority categories
+
+You can iterate over authority categories or access roles directly.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Iterate over categories
+    for (const role of accountUpdate.categories.hive) {
+      if (role.level === 'active') {
+        role.add('newaccount', 1);
+      }
+    }
+
+    // Or access directly (recommended - better IntelliSense)
+    accountUpdate.roles.owner.add('newaccount', 1);
+    accountUpdate.roles.active.add('anotherkey', 1);
+    accountUpdate.roles.posting.add('bob', 1);
+    accountUpdate.roles.memo.set('STM...');
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Iterate over categories
+    for role in account_update.categories.hive:
+        if role.level == 'active':
+            role.add('newaccount', 1)
+
+    # Or access directly (recommended - better IntelliSense)
+    account_update.roles.owner.add('newaccount', 1)
+    account_update.roles.active.add('anotherkey', 1)
+    account_update.roles.posting.add('bob', 1)
+    account_update.roles.memo.set('STM...')
+    ```
+  </Tab>
+</Tabs>
+
+## Recurrent transfer operations
+
+Create recurring transfers that execute automatically.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { 
+      DefineRecurrentTransferOperation,
+      RecurrentTransferRemovalOperation,
+      RecurrentTransferData
+    } from '@hiveio/wax';
+
+    async function setupRecurrentTransfer() {
+      const chain = await createHiveChain();
+
+      // Define a recurrent transfer
+      const transferData: RecurrentTransferData = {
+        fromAccount: "alice",
+        toAccount: "bob",
+        amount: chain.hive.satoshis(10), // 10 HIVE
+        executions: 12, // Execute 12 times
+        recurrence: 24, // Every 24 hours
+        memo: "Monthly payment",
+        pairId: undefined // Optional: for multiple transfers to same account
+      };
+
+      const recurrentTransfer = new DefineRecurrentTransferOperation(
+        transferData
+      );
+
+      // Add to transaction
+      const tx = await chain.createTransaction();
+      tx.pushOperation(recurrentTransfer);
+
+      console.log('Recurrent transfer configured');
+    }
+
+    async function cancelRecurrentTransfer() {
+      const chain = await createHiveChain();
+
+      // Remove a recurrent transfer
+      const removal = new RecurrentTransferRemovalOperation(
+        "alice",  // from
+        "bob",    // to
+        undefined // pairId (if you have multiple)
+      );
+
+      const tx = await chain.createTransaction();
+      tx.pushOperation(removal);
+
+      console.log('Recurrent transfer cancelled');
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.complex_operations.recurrent_transfer import (
+        DefineRecurrentTransferOperation,
+        RecurrentTransferRemovalOperation,
+        RecurrentTransferData
+    )
+
+    async def setup_recurrent_transfer():
+        chain = create_hive_chain()
+
+        # Define a recurrent transfer
+        transfer_data = RecurrentTransferData(
+            from_account="alice",
+            to_account="bob",
+            amount=chain.hive.satoshis(10),  # 10 HIVE
+            executions=12,  # Execute 12 times
+            recurrence=24,  # Every 24 hours
+            memo="Monthly payment",
+            pair_id=None  # Optional: for multiple transfers to same account
+        )
+
+        recurrent_transfer = DefineRecurrentTransferOperation(transfer_data)
+
+        # Add to transaction
+        tx = await chain.create_transaction()
+        tx.push_operation(recurrent_transfer)
+
+        print('Recurrent transfer configured')
+
+    async def cancel_recurrent_transfer():
+        chain = create_hive_chain()
+
+        # Remove a recurrent transfer
+        removal = RecurrentTransferRemovalOperation(
+            from_account="alice",
+            to_account="bob",
+            pair_id=None  # If you have multiple
+        )
+
+        tx = await chain.create_transaction()
+        tx.push_operation(removal)
+
+        print('Recurrent transfer cancelled')
+
+    asyncio.run(setup_recurrent_transfer())
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  - Minimum recurrence is 24 hours
+  - Minimum executions is 2
+  - Maximum execution date is 730 days in the future
+  - Since HF28, you can have multiple recurrent transfers to the same account using `pair_id`
+</Warning>
+
+## Comment and blog post operations
+
+Create posts and comments with rich metadata.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { BlogPostOperation, ReplyOperation } from '@hiveio/wax';
+
+    async function createBlogPost() {
+      const chain = await createHiveChain();
+
+      // Create a blog post
+      const post = new BlogPostOperation({
+        author: "alice",
+        body: "This is my first post using WAX!",
+        title: "Hello Hive",
+        category: "introduction", // Main tag/community
+        tags: ["wax", "blockchain", "hive"],
+        images: ["https://example.com/image.jpg"],
+        description: "My introduction to Hive",
+        beneficiaries: [
+          { account: "bob", weight: 500 }  // 5% to bob
+        ],
+        allowVotes: true,
+        allowCurationRewards: true,
+        percentHbd: 10000, // 100% HBD
+        maxAcceptedPayout: 1000000000 // 1000 HBD
+      });
+
+      // Add custom metadata
+      post.pushMetadataProperty("custom_field", "custom_value");
+
+      const tx = await chain.createTransaction();
+      tx.pushOperation(post);
+
+      console.log('Blog post ready to publish');
+    }
+
+    async function createReply() {
+      const chain = await createHiveChain();
+
+      // Reply to a post or comment
+      const reply = new ReplyOperation({
+        parentAuthor: "bob",
+        parentPermlink: "hello-hive",
+        author: "alice",
+        body: "Great post! Welcome to Hive.",
+        // Optional fields
+        title: "",
+        permlink: `re-bob-${Date.now()}`,
+        jsonMetadata: {}
+      });
+
+      const tx = await chain.createTransaction();
+      tx.pushOperation(reply);
+
+      console.log('Reply ready to post');
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    # Note: Python version uses proto.operations.comment directly
+    # Complex operation classes are TypeScript-specific for comments
+    from wax.proto.operations import comment, comment_options
+
+    async def create_blog_post():
+        chain = create_hive_chain()
+
+        # Create a blog post using standard operation
+        post = comment(
+            parent_author="",
+            parent_permlink="introduction",  # Category/main tag
+            author="alice",
+            permlink="hello-hive",
+            title="Hello Hive",
+            body="This is my first post using WAX!",
+            json_metadata=json.dumps({
+                "tags": ["wax", "blockchain", "hive"],
+                "image": ["https://example.com/image.jpg"],
+                "app": "wax/1.0.0"
+            })
+        )
+
+        tx = await chain.create_transaction()
+        tx.push_operation(post)
+
+        print('Blog post ready to publish')
+
+    async def create_reply():
+        chain = create_hive_chain()
+
+        # Reply to a post or comment
+        reply = comment(
+            parent_author="bob",
+            parent_permlink="hello-hive",
+            author="alice",
+            permlink=f"re-bob-{int(time.time())}",
+            title="",
+            body="Great post! Welcome to Hive.",
+            json_metadata="{}"
+        )
+
+        tx = await chain.create_transaction()
+        tx.push_operation(reply)
+
+        print('Reply ready to post')
+
+    asyncio.run(create_blog_post())
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  The `BlogPostOperation` automatically generates metadata in the correct format and can create `comment_options` operations for beneficiaries and payout settings.
+</Tip>
+
+## Witness operations
+
+Update witness properties for block production.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WitnessSetProperties, WitnessSetPropertiesData } from '@hiveio/wax';
+
+    async function updateWitnessProperties() {
+      const chain = await createHiveChain();
+
+      const witnessData: WitnessSetPropertiesData = {
+        owner: "alice",
+        witnessSigningKey: "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+        newSigningKey: "STM8Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+        accountCreationFee: chain.hive.satoshis(3), // 3 HIVE
+        url: "https://mywitness.com",
+        hbdExchangeRate: {
+          base: chain.hbd.satoshis(100), // 1 HBD
+          quote: chain.hive.satoshis(300) // = 0.33 HIVE
+        },
+        maximumBlockSize: 65536,
+        hbdInterestRate: 1500, // 15%
+        accountSubsidyBudget: 50000,
+        accountSubsidyDecay: 330782
+      };
+
+      const witnessOp = new WitnessSetProperties(witnessData);
+
+      const tx = await chain.createTransaction();
+      tx.pushOperation(witnessOp);
+
+      console.log('Witness properties ready to update');
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.complex_operations.witness_set_properties import (
+        WitnessSetProperties,
+        WitnessSetPropertiesData,
+        HbdExchangeRate
+    )
+
+    async def update_witness_properties():
+        chain = create_hive_chain()
+
+        witness_data = WitnessSetPropertiesData(
+            owner="alice",
+            witness_signing_key="STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+            new_signing_key="STM8Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU",
+            account_creation_fee=chain.hive.satoshis(3),  # 3 HIVE
+            url="https://mywitness.com",
+            hbd_exchange_rate=HbdExchangeRate(
+                base=chain.hbd.satoshis(100),  # 1 HBD
+                quote=chain.hive.satoshis(300)  # = 0.33 HIVE
+            ),
+            maximum_block_size=65536,
+            hbd_interest_rate=1500,  # 15%
+            account_subsidy_budget=50000,
+            account_subsidy_decay=330782
+        )
+
+        witness_op = WitnessSetProperties(witness_data)
+
+        tx = await chain.create_transaction()
+        tx.push_operation(witness_op)
+
+        print('Witness properties ready to update')
+
+    asyncio.run(update_witness_properties())
+    ```
+  </Tab>
+</Tabs>
+
+## Proposal voting operations
+
+Vote on Hive DAO proposals.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { UpdateProposalVoteOperation } from '@hiveio/wax';
+
+    async function voteOnProposal() {
+      const chain = await createHiveChain();
+
+      // Vote for a proposal
+      const vote = new UpdateProposalVoteOperation(
+        "alice",      // voter
+        [123, 456],   // proposal IDs
+        true          // approve (false to remove vote)
+      );
+
+      const tx = await chain.createTransaction();
+      tx.pushOperation(vote);
+
+      console.log('Proposal vote ready');
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+    from wax.complex_operations.update_proposal_operation import (
+        UpdateProposalVoteOperation
+    )
+
+    async def vote_on_proposal():
+        chain = create_hive_chain()
+
+        # Vote for a proposal
+        vote = UpdateProposalVoteOperation(
+            voter="alice",
+            proposal_ids=[123, 456],
+            approve=True  # False to remove vote
+        )
+
+        tx = await chain.create_transaction()
+        tx.push_operation(vote)
+
+        print('Proposal vote ready')
+
+    asyncio.run(vote_on_proposal())
+    ```
+  </Tab>
+</Tabs>
+
+## Creating custom complex operations
+
+You can create your own complex operation classes for application-specific workflows.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { OperationBase, IOperationSink, operation } from '@hiveio/wax';
+
+    // Example: Splinterlands game operation
+    export class SplinterlandsGame extends OperationBase {
+      private readonly operations: operation[] = [];
+
+      public constructor(
+        public readonly player: string
+      ) {
+        super();
+      }
+
+      public finalize(_sink: IOperationSink): Iterable<operation> {
+        return this.operations;
+      }
+
+      public enterTournament(tournamentId: string): this {
+        this.operations.push({
+          custom_json_operation: {
+            id: "sm_enter_tournament",
+            json: JSON.stringify({
+              tournament_id: tournamentId,
+              app: "splinterlands/0.7.139"
+            }),
+            required_auths: [],
+            required_posting_auths: [this.player]
+          }
+        });
+        return this;
+      }
+
+      public stakeTokens(amount: number): this {
+        this.operations.push({
+          custom_json_operation: {
+            id: "sm_stake_tokens",
+            json: JSON.stringify({
+              qty: amount.toFixed(3),
+              token: "SPS",
+              app: "splinterlands/0.7.139"
+            }),
+            required_auths: [],
+            required_posting_auths: [this.player]
+          }
+        });
+        return this;
+      }
+    }
+
+    // Usage
+    const chain = await createHiveChain();
+    const tx = await chain.createTransaction();
+
+    const game = new SplinterlandsGame("username");
+    game.enterTournament("abc123").stakeTokens(10);
+    
+    tx.pushOperation(game);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from typing import Iterable
+    from wax._private.operation_base import (
+        OperationBase,
+        ConvertedToProtoOperation
+    )
+    from wax.proto.operations import custom_json
+    import json
+
+    # Example: Splinterlands game operation
+    class SplinterlandsGame(OperationBase):
+        def __init__(self, player: str):
+            super().__init__()
+            self.player = player
+            self.operations: list[ConvertedToProtoOperation] = []
+
+        def finalize(self, api) -> Iterable[ConvertedToProtoOperation]:
+            return self.operations
+
+        def enter_tournament(self, tournament_id: str):
+            self.operations.append(
+                custom_json(
+                    id="sm_enter_tournament",
+                    json=json.dumps({
+                        "tournament_id": tournament_id,
+                        "app": "splinterlands/0.7.139"
+                    }),
+                    required_auths=[],
+                    required_posting_auths=[self.player]
+                )
+            )
+            return self
+
+        def stake_tokens(self, amount: float):
+            self.operations.append(
+                custom_json(
+                    id="sm_stake_tokens",
+                    json=json.dumps({
+                        "qty": f"{amount:.3f}",
+                        "token": "SPS",
+                        "app": "splinterlands/0.7.139"
+                    }),
+                    required_auths=[],
+                    required_posting_auths=[self.player]
+                )
+            )
+            return self
+
+    # Usage
+    async def use_custom_operation():
+        chain = create_hive_chain()
+        tx = await chain.create_transaction()
+
+        game = SplinterlandsGame("username")
+        game.enter_tournament("abc123").stake_tokens(10)
+        
+        tx.push_operation(game)
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  Custom operations are perfect for:
+  - Application-specific workflows
+  - Batching related operations
+  - Encapsulating business logic
+  - Building reusable components
+</Tip>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use complex operations for common patterns">
+    Instead of manually constructing protocol buffer messages, use complex operations for common tasks like account updates and recurrent transfers.
+
+    ```typescript
+    // ✅ Good - Using complex operation
+    const accountUpdate = await AccountAuthorityUpdateOperation.createFor(
+      chain,
+      "alice"
+    );
+    accountUpdate.roles.posting.add("bob", 1);
+
+    // ❌ Avoid - Manual construction (more error-prone)
+    tx.pushOperation({
+      account_update_operation: {
+        account: "alice",
+        posting: { /* complex authority structure */ }
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Validate complex data before creating operations">
+    Check that your data meets requirements before creating complex operations.
+
+    ```typescript
+    // Validate recurrent transfer data
+    if (executions < 2) {
+      throw new Error('Executions must be at least 2');
+    }
+    if (recurrence < 24) {
+      throw new Error('Recurrence must be at least 24 hours');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Chain operations for readability">
+    Many complex operations support method chaining for cleaner code.
+
+    ```typescript
+    game
+      .enterTournament("abc123")
+      .stakeTokens(10)
+      .claimRewards();
+    ```
+  </Accordion>
+
+  <Accordion title="Handle finalize() errors">
+    The `finalize()` method can throw errors if data is invalid. Handle these appropriately.
+
+    ```typescript
+    try {
+      tx.pushOperation(complexOperation);
+    } catch (error) {
+      console.error('Operation finalization failed:', error);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="API extensions" icon="puzzle-piece" href="/guides/api-extensions">
+    Extend the API with custom endpoints
+  </Card>
+  <Card title="Formatters" icon="paintbrush" href="/guides/formatters">
+    Format output data for display
+  </Card>
+  <Card title="Operations reference" icon="code" href="/api/typescript/operations">
+    Complete operations API documentation
+  </Card>
+  <Card title="Protocol documentation" icon="book" href="https://hive.io/hf26">
+    Hive protocol specifications
+  </Card>
+</CardGroup>

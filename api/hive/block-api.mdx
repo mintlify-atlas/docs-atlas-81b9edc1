@@ -1,0 +1,310 @@
+---
+title: Block API
+description: Retrieve block and block header information from the Hive blockchain
+---
+
+The Block API provides access to blockchain blocks and their headers. Use these endpoints to retrieve block data for analysis, verification, or synchronization.
+
+## get_block
+
+Retrieve a complete block including transactions by block number.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.block_api.get_block({
+  block_num: 80000000
+});
+
+if (result.block) {
+  console.log(`Block ID: ${result.block.block_id}`);
+  console.log(`Witness: ${result.block.witness}`);
+  console.log(`Transactions: ${result.block.transactions.length}`);
+}
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.block_api.get_block(block_num=80000000)
+
+if result.block:
+    print(f"Block ID: {result.block.block_id}")
+    print(f"Witness: {result.block.witness}")
+    print(f"Transactions: {len(result.block.transactions)}")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="block_num" type="number" required>
+  The block number to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="block" type="ApiBlock | undefined">
+  The block object, or undefined if block doesn't exist
+
+  <Expandable title="ApiBlock properties">
+    <ResponseField name="block_id" type="string">
+      Unique block identifier
+    </ResponseField>
+
+    <ResponseField name="previous" type="string">
+      Previous block ID
+    </ResponseField>
+
+    <ResponseField name="timestamp" type="string">
+      Block timestamp in ISO format
+    </ResponseField>
+
+    <ResponseField name="witness" type="string">
+      Witness account name that produced this block
+    </ResponseField>
+
+    <ResponseField name="transaction_merkle_root" type="string">
+      Merkle root of all transactions in this block
+    </ResponseField>
+
+    <ResponseField name="witness_signature" type="string">
+      Witness signature for this block
+    </ResponseField>
+
+    <ResponseField name="signing_key" type="string">
+      Public key used to sign this block
+    </ResponseField>
+
+    <ResponseField name="transactions" type="ApiTransaction[]">
+      Array of transactions in this block
+    </ResponseField>
+
+    <ResponseField name="transaction_ids" type="string[]">
+      Array of transaction IDs in this block
+    </ResponseField>
+
+    <ResponseField name="extensions" type="object[]">
+      Block extensions
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "block": {
+    "block_id": "04c1c7a566fc0da66aee465714acee7346b48ac2",
+    "previous": "04c1c7a4e8b9a0c1234567890abcdef012345678",
+    "timestamp": "2026-03-04T12:00:00",
+    "witness": "blocktrades",
+    "transaction_merkle_root": "0000000000000000000000000000000000000000",
+    "witness_signature": "1f7f0c3e89e6ccef1ae156a96fb4255e619ca3a73ef3be46746b4b40a66cc4252070eb313cc6308bbee39a0a9fc38ef99137ead3c9b003584c0a1b8f5ca2ff8707",
+    "signing_key": "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9",
+    "transactions": [],
+    "transaction_ids": [],
+    "extensions": []
+  }
+}
+```
+</RequestExample>
+
+## get_block_header
+
+Retrieve only the block header without transaction data.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.block_api.get_block_header({
+  block_num: 80000000
+});
+
+console.log(`Timestamp: ${result.header.timestamp}`);
+console.log(`Witness: ${result.header.witness}`);
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.block_api.get_block_header(block_num=80000000)
+
+print(f"Timestamp: {result.header.timestamp}")
+print(f"Witness: {result.header.witness}")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="block_num" type="number" required>
+  The block number to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="header" type="ApiBlockHeader">
+  The block header object
+
+  <Expandable title="ApiBlockHeader properties">
+    <ResponseField name="previous" type="string">
+      Previous block ID
+    </ResponseField>
+
+    <ResponseField name="timestamp" type="string">
+      Block timestamp in ISO format
+    </ResponseField>
+
+    <ResponseField name="witness" type="string">
+      Witness account name that produced this block
+    </ResponseField>
+
+    <ResponseField name="transaction_merkle_root" type="string">
+      Merkle root of all transactions in this block
+    </ResponseField>
+
+    <ResponseField name="extensions" type="object[]">
+      Block extensions
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "header": {
+    "previous": "04c1c7a4e8b9a0c1234567890abcdef012345678",
+    "timestamp": "2026-03-04T12:00:00",
+    "witness": "blocktrades",
+    "transaction_merkle_root": "0000000000000000000000000000000000000000",
+    "extensions": []
+  }
+}
+```
+</RequestExample>
+
+## get_block_range
+
+Retrieve multiple consecutive blocks in a single request.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.block_api.get_block_range({
+  starting_block_num: 80000000,
+  count: 10
+});
+
+console.log(`Retrieved ${result.blocks.length} blocks`);
+result.blocks.forEach(block => {
+  console.log(`Block ${block.block_id}: ${block.transactions.length} transactions`);
+});
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.block_api.get_block_range(
+    starting_block_num=80000000,
+    count=10
+)
+
+print(f"Retrieved {len(result.blocks)} blocks")
+for block in result.blocks:
+    print(f"Block {block.block_id}: {len(block.transactions)} transactions")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="starting_block_num" type="number" required>
+  The first block number to retrieve
+</ParamField>
+
+<ParamField path="count" type="number" required>
+  Number of consecutive blocks to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="blocks" type="ApiBlock[]">
+  Array of block objects. See [get_block](#get_block) for block structure.
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "blocks": [
+    {
+      "block_id": "04c1c7a566fc0da66aee465714acee7346b48ac2",
+      "previous": "04c1c7a4e8b9a0c1234567890abcdef012345678",
+      "timestamp": "2026-03-04T12:00:00",
+      "witness": "blocktrades",
+      "transactions": [],
+      "transaction_ids": []
+    },
+    {
+      "block_id": "04c1c7a666fc0da66aee465714acee7346b48ac3",
+      "previous": "04c1c7a566fc0da66aee465714acee7346b48ac2",
+      "timestamp": "2026-03-04T12:00:03",
+      "witness": "good-karma",
+      "transactions": [],
+      "transaction_ids": []
+    }
+  ]
+}
+```
+</RequestExample>
+
+## Common use cases
+
+### Sync blockchain data
+
+Use `get_block_range` to efficiently sync multiple blocks:
+
+```typescript
+const BATCH_SIZE = 100;
+let currentBlock = 80000000;
+
+while (currentBlock < targetBlock) {
+  const result = await chain.api.block_api.get_block_range({
+    starting_block_num: currentBlock,
+    count: BATCH_SIZE
+  });
+  
+  // Process blocks
+  for (const block of result.blocks) {
+    await processBlock(block);
+  }
+  
+  currentBlock += BATCH_SIZE;
+}
+```
+
+### Verify block integrity
+
+Check block header information without downloading full transaction data:
+
+```typescript
+const header = await chain.api.block_api.get_block_header({
+  block_num: 80000000
+});
+
+// Verify witness and timestamp
+if (header.header.witness === expectedWitness) {
+  console.log("Block verified");
+}
+```

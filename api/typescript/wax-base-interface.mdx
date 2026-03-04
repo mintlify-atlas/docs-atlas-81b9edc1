@@ -1,0 +1,581 @@
+---
+title: IWaxBaseInterface
+description: Core interface for offline Hive blockchain operations
+---
+
+The `IWaxBaseInterface` provides methods for offline blockchain operations including transaction creation, asset handling, key management, and cryptographic operations.
+
+## Properties
+
+### ASSETS
+
+Readonly record of asset definitions for HIVE, HBD, and VESTS.
+
+```typescript
+readonly ASSETS: Readonly<Record<EAssetName, NaiAsset>>;
+```
+
+### formatter
+
+Access to the WAX formatter for custom formatting operations.
+
+```typescript
+readonly formatter: IWaxExtendableFormatter;
+```
+
+### waxify
+
+Shorthand access to the waxify template literal formatter.
+
+```typescript
+readonly waxify: IWaxExtendableFormatter['waxify'];
+```
+
+### chainId
+
+The chain ID configured for this instance.
+
+```typescript
+readonly chainId: THexString;
+```
+
+### addressPrefix
+
+The public key address prefix for this chain (e.g., "STM" for mainnet).
+
+```typescript
+get addressPrefix(): string;
+```
+
+### config
+
+Protocol configuration for the current chain.
+
+```typescript
+get config(): IChainConfig;
+```
+
+## Transaction methods
+
+### createTransactionWithTaPoS
+
+Constructs a new transaction object with TaPoS (Transaction as Proof of Stake) data.
+
+```typescript
+createTransactionWithTaPoS(
+  taposBlockId: TBlockHash,
+  expirationTime?: TTimestamp
+): ITransaction;
+```
+
+<ParamField path="taposBlockId" type="TBlockHash" required>
+  Reference block ID (can be head block ID) for TaPoS. This is a 20-byte string or hex string.
+</ParamField>
+
+<ParamField path="expirationTime" type="TTimestamp">
+  Expiration time for the transaction. Can be:
+  - Date object
+  - Unix timestamp in milliseconds (number)
+  - ISO 8601 date string
+  - Relative time: `"+10s"`, `"+30m"`, `"+1h"`
+  
+  Maximum expiration time on mainnet is 1 hour. Defaults to `"+1m"`.
+</ParamField>
+
+<ResponseField name="ITransaction" type="ITransaction">
+  Transaction interface ready to receive operations
+</ResponseField>
+
+#### Usage example
+
+```typescript
+const tx = wax.createTransactionWithTaPoS(
+  "0000000000000000000000000000000000000000",
+  "+30m"
+);
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+```
+
+### createTransactionFromProto
+
+Constructs a transaction from a protobuf transaction object.
+
+```typescript
+createTransactionFromProto(protoTransaction: transaction): ITransaction;
+```
+
+### createTransactionFromJson
+
+Converts a Hive API-form transaction (HF26 format) to a transaction object.
+
+```typescript
+createTransactionFromJson(
+  transactionData: string | object | ApiTransaction
+): ITransaction;
+```
+
+### createTransactionFromLegacyJson
+
+Converts a legacy Hive API-form transaction to a transaction object.
+
+```typescript
+createTransactionFromLegacyJson(
+  transactionData: string | object | LegacyApiTransaction
+): ITransaction;
+```
+
+### convertTransactionToBinaryForm
+
+Converts a transaction to HF26 binary form.
+
+```typescript
+convertTransactionToBinaryForm(
+  transaction: ApiTransaction,
+  stripToUnsignedTransaction?: boolean
+): THexString;
+```
+
+### convertTransactionFromBinaryForm
+
+Converts a transaction from HF26 binary form to Hive API-form JSON.
+
+```typescript
+convertTransactionFromBinaryForm(transaction: THexString): ApiTransaction;
+```
+
+## Asset methods
+
+### hiveCoins
+
+Retrieves HIVE in NAI form with given amount (using decimal precision).
+
+```typescript
+hiveCoins(amount: number): NaiAsset;
+```
+
+<ParamField path="amount" type="number" required>
+  Amount of HIVE as a decimal number. Accepts JS Double-precision floating-point format (IEEE 754), which does not support numbers greater than 2^53 - 1.
+</ParamField>
+
+#### Usage example
+
+```typescript
+const hive = wax.hiveCoins(100.5);
+// Returns: { amount: "100500", precision: 3, nai: "@@000000021" }
+```
+
+### hiveSatoshis
+
+Retrieves HIVE in NAI form with given amount (using integer satoshis).
+
+```typescript
+hiveSatoshis(amount: TNaiAssetConvertible): NaiAsset;
+```
+
+<ParamField path="amount" type="TNaiAssetConvertible" required>
+  Amount of HIVE in satoshis (integer). Can be number, string, or BigInt.
+</ParamField>
+
+#### Usage example
+
+```typescript
+const hive = wax.hiveSatoshis(100500);
+// Returns: { amount: "100500", precision: 3, nai: "@@000000021" }
+
+const largeAmount = wax.hiveSatoshis("10000000000000000");
+```
+
+### hbdCoins
+
+Retrieves HBD in NAI form with given amount (using decimal precision).
+
+```typescript
+hbdCoins(amount: number): NaiAsset;
+```
+
+### hbdSatoshis
+
+Retrieves HBD in NAI form with given amount (using integer satoshis).
+
+```typescript
+hbdSatoshis(amount: TNaiAssetConvertible): NaiAsset;
+```
+
+### vestsCoins
+
+Retrieves VESTS in NAI form with given amount (using decimal precision).
+
+```typescript
+vestsCoins(amount: number): NaiAsset;
+```
+
+### vestsSatoshis
+
+Retrieves VESTS in NAI form with given amount (using integer satoshis).
+
+```typescript
+vestsSatoshis(amount: TNaiAssetConvertible): NaiAsset;
+```
+
+### getAsset
+
+Retrieves asset amount and symbol from NAI data.
+
+```typescript
+getAsset(nai: NaiAsset): IHiveAssetData;
+```
+
+#### Usage example
+
+```typescript
+const nai = wax.hiveCoins(100);
+const asset = wax.getAsset(nai);
+// Returns: { amount: "100.000", symbol: "HIVE" }
+```
+
+## Asset conversion methods
+
+### vestsToHp
+
+Converts VESTS to Hive Power (HP).
+
+```typescript
+vestsToHp(
+  vests: TNaiAssetSource,
+  totalVestingFundHive: TNaiAssetSource,
+  totalVestingShares: TNaiAssetSource
+): NaiAsset;
+```
+
+### hpToVests
+
+Converts Hive Power to VESTS.
+
+```typescript
+hpToVests(
+  hive: TNaiAssetSource,
+  totalVestingFundHive: TNaiAssetSource,
+  totalVestingShares: TNaiAssetSource
+): NaiAsset;
+```
+
+### hbdToHive
+
+Converts HBD to HIVE using price feed.
+
+```typescript
+hbdToHive(
+  hbd: TNaiAssetSource,
+  base: TNaiAssetSource,
+  quote: TNaiAssetSource
+): NaiAsset;
+```
+
+### hiveToHbd
+
+Converts HIVE to HBD using price feed.
+
+```typescript
+hiveToHbd(
+  amount: TNaiAssetSource,
+  base: TNaiAssetSource,
+  quote: TNaiAssetSource
+): NaiAsset;
+```
+
+## Calculation methods
+
+### calculateCurrentManabarValue
+
+Calculates current manabar value for a Hive account.
+
+```typescript
+calculateCurrentManabarValue(
+  now: number,
+  maxMana: TNaiAssetConvertible,
+  currentMana: TNaiAssetConvertible,
+  lastUpdateTime: number
+): IManabarData;
+```
+
+<ResponseField name="IManabarData" type="IManabarData">
+  <Expandable title="properties">
+    <ResponseField name="current" type="bigint">
+      Current manabar value
+    </ResponseField>
+    <ResponseField name="max" type="bigint">
+      Maximum manabar value
+    </ResponseField>
+    <ResponseField name="percent" type="number">
+      Percent of manabar load with two digits of precision
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### calculateManabarFullRegenerationTime
+
+Calculates full regeneration time for a manabar.
+
+```typescript
+calculateManabarFullRegenerationTime(
+  now: number,
+  maxMana: TNaiAssetConvertible,
+  currentMana: TNaiAssetConvertible,
+  lastUpdateTime: number
+): number;
+```
+
+<ResponseField name="number" type="number">
+  Full regeneration timestamp in seconds
+</ResponseField>
+
+### calculateAccountHp
+
+Calculates account Hive Power.
+
+```typescript
+calculateAccountHp(
+  vests: TNaiAssetSource,
+  totalVestingFundHive: TNaiAssetSource,
+  totalVestingShares: TNaiAssetSource
+): NaiAsset;
+```
+
+### calculateWitnessVotesHp
+
+Calculates witness votes in Hive Power.
+
+```typescript
+calculateWitnessVotesHp(
+  votes: TNaiAssetSource,
+  totalVestingFundHive: TNaiAssetSource,
+  totalVestingShares: TNaiAssetSource
+): NaiAsset;
+```
+
+### calculateHpApr
+
+Calculates current HP APR.
+
+```typescript
+calculateHpApr(
+  headBlockNum: number,
+  vestingRewardPercent: number,
+  virtualSupply: TNaiAssetSource,
+  totalVestingFundHive: TNaiAssetSource
+): number;
+```
+
+<ResponseField name="number" type="number">
+  HP APR percent with 2 decimals
+</ResponseField>
+
+### estimateHbdInterest
+
+Estimates HBD interest value.
+
+```typescript
+estimateHbdInterest(
+  accountHdbSeconds: TNaiAssetConvertible,
+  hbdBalance: TNaiAssetSource,
+  lastCompoundingDate: TTimestamp,
+  now: TTimestamp,
+  interestRate: number
+): NaiAsset;
+```
+
+### estimateHiveCollateral
+
+Estimates HIVE collateral for HBD.
+
+```typescript
+estimateHiveCollateral(
+  currentMedianHistoryBase: TNaiAssetSource,
+  currentMedianHistoryQuote: TNaiAssetSource,
+  currentMinHistoryBase: TNaiAssetSource,
+  currentMinHistoryQuote: TNaiAssetSource,
+  hbdAmountToGet: TNaiAssetSource
+): NaiAsset;
+```
+
+## Cryptographic methods
+
+### suggestBrainKey
+
+Generates a secure brain key with corresponding private and public keys.
+
+```typescript
+suggestBrainKey(): IBrainKeyData;
+```
+
+<ResponseField name="IBrainKeyData" type="IBrainKeyData">
+  <Expandable title="properties">
+    <ResponseField name="brainKey" type="string">
+      Generated brain key phrase
+    </ResponseField>
+    <ResponseField name="wifPrivateKey" type="string">
+      Private key in WIF format
+    </ResponseField>
+    <ResponseField name="associatedPublicKey" type="string">
+      Public key in WIF format
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### getPrivateKeyFromPassword
+
+Derives a private key for a given role from a master password.
+
+```typescript
+getPrivateKeyFromPassword(
+  account: string,
+  role: string,
+  password: string
+): IPrivateKeyData;
+```
+
+<ParamField path="account" type="string" required>
+  Account name
+</ParamField>
+
+<ParamField path="role" type="string" required>
+  Key role: "active", "owner", "posting", or "memo"
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Master password
+</ParamField>
+
+### calculatePublicKey
+
+Calculates the public key from a private key.
+
+```typescript
+calculatePublicKey(wifPrivateKey: string): TPublicKey;
+```
+
+### convertRawPrivateKeyToWif
+
+Converts a raw private key (32 bytes hex) to WIF format.
+
+```typescript
+convertRawPrivateKeyToWif(rawPrivateKey: THexString): string;
+```
+
+### convertRawPublicKeyToWif
+
+Converts a raw public key (33 or 65 bytes hex) to WIF format.
+
+```typescript
+convertRawPublicKeyToWif(rawPublicKey: THexString): string;
+```
+
+### getPublicKeyFromSignature
+
+Retrieves the public key used to create a signature.
+
+```typescript
+getPublicKeyFromSignature(
+  sigDigest: THexString,
+  signature: THexString
+): THexString;
+```
+
+## Validation methods
+
+### isValidAccountName
+
+Checks if an account name is valid.
+
+```typescript
+isValidAccountName(name: string): boolean;
+```
+
+Account names must:
+- Comply with RFC 1035 grammar
+- Use only lowercase letters
+- Be between 3 and 16 characters (inclusive)
+
+### operationGetImpactedAccounts
+
+Retrieves account names impacted by an operation.
+
+```typescript
+operationGetImpactedAccounts(
+  operation: operation | ApiOperation
+): Set<TAccountName>;
+```
+
+### operationBinaryViewMetadata
+
+Retrieves binary view metadata for an operation.
+
+```typescript
+operationBinaryViewMetadata(
+  operation: operation | ApiOperation,
+  isHf26Serialization?: boolean
+): IBinaryViewOutputData;
+```
+
+## Utility methods
+
+### extendConfig
+
+Extends the current instance with custom options, creating a copy.
+
+```typescript
+extendConfig(config: IWaxBaseExtendibleOptions): IWaxBaseInterface;
+```
+
+### getVersion
+
+Retrieves the bundled package version string.
+
+```typescript
+getVersion(): string;
+```
+
+### delete
+
+Deletes the created WAX proto_protocol instance.
+
+```typescript
+delete(): void;
+```
+
+## TypeScript types
+
+```typescript
+type TNaiAssetConvertible = number | string | bigint;
+type TNaiAssetSource = TNaiAssetConvertible | NaiAsset;
+type TTimestamp = Date | number | string;
+type THexString = string;
+type TPublicKey = string;
+type TBlockHash = string;
+type TTransactionId = string;
+
+interface NaiAsset {
+  amount: string;
+  precision: number;
+  nai: string;
+}
+
+interface IHiveAssetData {
+  amount: string;
+  symbol: string;
+}
+```
+
+## See also
+
+- [createWaxFoundation](/api/typescript/wax-factory#createwaxfoundation) - Factory function
+- [ITransaction](/api/typescript/transaction) - Transaction interface
+- [Operations](/api/typescript/operations) - Operation types

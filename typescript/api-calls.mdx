@@ -1,0 +1,558 @@
+---
+title: Making API calls to the Hive network
+description: Query blockchain data and interact with Hive APIs using the WAX SDK
+---
+
+The WAX SDK provides typed access to all Hive blockchain APIs. Query accounts, blocks, witnesses, resource credits, and more with full TypeScript support.
+
+## Available APIs
+
+The SDK includes these APIs:
+
+- **database_api** - Account data, blocks, witnesses, proposals, and chain properties
+- **block_api** - Block fetching and block ranges
+- **network_broadcast_api** - Transaction broadcasting
+- **rc_api** - Resource credits information
+- **account_by_key_api** - Account lookup by public key
+- **REST APIs** - High-performance REST endpoints
+
+## API setup
+
+Access APIs through a chain instance:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain({
+  apiEndpoint: "https://api.hive.blog",
+  restApiEndpoint: "https://api.syncad.com",
+  apiTimeout: 5000 // 5 seconds
+});
+
+// Access JSON-RPC APIs
+const account = await chain.api.database_api.find_accounts({ accounts: ["alice"] });
+
+// Access REST APIs
+const data = await chain.restApi.some_endpoint({ /* params */ });
+```
+
+## database_api
+
+Query blockchain data and account information.
+
+### Find accounts
+
+```typescript
+const result = await chain.api.database_api.find_accounts({
+  accounts: ["alice", "bob"],
+  delayed_votes_active: true
+});
+
+for (const account of result.accounts) {
+  console.log(`Account: ${account.name}`);
+  console.log(`Balance: ${account.balance}`);
+  console.log(`HBD: ${account.hbd_balance}`);
+  console.log(`VESTS: ${account.vesting_shares}`);
+  console.log(`Voting mana: ${account.voting_manabar.current_mana}`);
+  console.log(`Downvote mana: ${account.downvote_manabar.current_mana}`);
+}
+```
+
+### Get dynamic global properties
+
+```typescript
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log(`Head block: ${props.head_block_number}`);
+console.log(`Block ID: ${props.head_block_id}`);
+console.log(`Time: ${props.time}`);
+console.log(`Total VESTS: ${props.total_vesting_shares}`);
+console.log(`Total HIVE: ${props.total_vesting_fund_hive}`);
+console.log(`Virtual supply: ${props.virtual_supply}`);
+console.log(`HBD interest rate: ${props.hbd_interest_rate}`);
+```
+
+### Get witness schedule
+
+```typescript
+const schedule = await chain.api.database_api.get_witness_schedule({});
+
+console.log(`Current shuffled witnesses:`, schedule.current_shuffled_witnesses);
+console.log(`Median props:`, schedule.median_props);
+```
+
+### Find witnesses
+
+```typescript
+const witnesses = await chain.api.database_api.find_witnesses({
+  owners: ["gtg", "blocktrades"]
+});
+
+for (const witness of witnesses.witnesses) {
+  console.log(`Witness: ${witness.owner}`);
+  console.log(`Votes: ${witness.votes}`);
+  console.log(`URL: ${witness.url}`);
+  console.log(`Running version: ${witness.running_version}`);
+  console.log(`HBD exchange rate: ${witness.hbd_exchange_rate}`);
+}
+```
+
+### Verify authority
+
+Check if a transaction has valid signatures:
+
+```typescript
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+
+// Sign transaction...
+
+const result = await chain.api.database_api.verify_authority({
+  trx: tx.toApiJson()
+});
+
+console.log(`Valid: ${result.valid}`);
+```
+
+### List proposals
+
+```typescript
+const proposals = await chain.api.database_api.list_proposals({
+  start: [0],
+  limit: 10,
+  order: "by_total_votes",
+  order_direction: "descending",
+  status: "votable"
+});
+
+for (const proposal of proposals.proposals) {
+  console.log(`Proposal ${proposal.proposal_id}: ${proposal.subject}`);
+  console.log(`Creator: ${proposal.creator}`);
+  console.log(`Daily pay: ${proposal.daily_pay}`);
+  console.log(`Total votes: ${proposal.total_votes}`);
+}
+```
+
+### Get feed history
+
+Get price feed information:
+
+```typescript
+const feed = await chain.api.database_api.get_feed_history({});
+
+console.log(`Current median:`, feed.current_median_history);
+console.log(`Base: ${feed.current_median_history.base}`);
+console.log(`Quote: ${feed.current_median_history.quote}`);
+```
+
+### Get transaction hex
+
+Get the hexadecimal representation of a signed transaction:
+
+```typescript
+const result = await chain.api.database_api.get_transaction_hex({
+  trx: tx.toApiJson()
+});
+
+console.log(`Hex: ${result.hex}`);
+```
+
+## block_api
+
+Fetch block data from the blockchain.
+
+### Get single block
+
+```typescript
+const result = await chain.api.block_api.get_block({
+  block_num: 87654321
+});
+
+const block = result.block;
+console.log(`Block ID: ${block.block_id}`);
+console.log(`Previous: ${block.previous}`);
+console.log(`Timestamp: ${block.timestamp}`);
+console.log(`Witness: ${block.witness}`);
+console.log(`Transactions: ${block.transactions.length}`);
+
+for (const tx of block.transactions) {
+  console.log(`  Transaction with ${tx.operations.length} operations`);
+}
+```
+
+### Get block range
+
+Fetch multiple blocks:
+
+```typescript
+const result = await chain.api.block_api.get_block_range({
+  starting_block_num: 87654320,
+  count: 10
+});
+
+for (const block of result.blocks) {
+  console.log(`Block ${block.block_id}: ${block.transactions.length} transactions`);
+}
+```
+
+### Get block header
+
+Fetch only the block header:
+
+```typescript
+const result = await chain.api.block_api.get_block_header({
+  block_num: 87654321
+});
+
+console.log(result.header);
+```
+
+## rc_api
+
+Query resource credits information.
+
+### Find RC accounts
+
+```typescript
+const result = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice", "bob"]
+});
+
+for (const rc of result.rc_accounts) {
+  console.log(`Account: ${rc.account}`);
+  console.log(`Max RC: ${rc.max_rc}`);
+  console.log(`Current RC: ${rc.rc_manabar.current_mana}`);
+  console.log(`Last update: ${rc.rc_manabar.last_update_time}`);
+}
+```
+
+Calculate RC manabar:
+
+```typescript
+const rcData = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+const rc = rcData.rc_accounts[0];
+
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+const now = new Date(props.time).getTime() / 1000;
+
+const manabar = chain.calculateCurrentManabarValue(
+  now,
+  rc.max_rc,
+  rc.rc_manabar.current_mana,
+  rc.rc_manabar.last_update_time
+);
+
+console.log(`RC: ${manabar.percent}%`);
+```
+
+## account_by_key_api
+
+Find accounts by public key.
+
+### Get key references
+
+```typescript
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: ["STM8ZSw7KjYWJoVvffQLCxj3iLkMHUB7ToyqEYvYj2kH8XdDH3MSL"]
+});
+
+console.log(`Accounts with this key:`, result.accounts);
+```
+
+## network_broadcast_api
+
+Broadcast transactions to the network.
+
+### Broadcast transaction
+
+```typescript
+try {
+  await chain.api.network_broadcast_api.broadcast_transaction({
+    trx: tx.toApiJson(),
+    max_block_age: -1
+  });
+  console.log("Transaction broadcasted!");
+} catch (error) {
+  console.error("Broadcast failed:", error.message);
+}
+```
+
+Note: You can also use the convenience method:
+
+```typescript
+await chain.broadcast(tx);
+```
+
+## REST API
+
+Access high-performance REST endpoints.
+
+### Configure REST endpoints
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain({
+  restApiEndpoint: "https://api.syncad.com"
+});
+
+// Change default REST API URL
+chain.restApi.endpointUrl = "https://my-api.example.com";
+
+// Change URL for specific endpoint
+chain.restApi.specific_endpoint.endpointUrl = "https://specialized-api.example.com";
+
+// Reset to default
+chain.restApi.specific_endpoint.endpointUrl = undefined;
+```
+
+## Extending APIs
+
+### Add custom JSON-RPC methods
+
+Extend the chain with custom API methods:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const customApiSchema = {
+  custom_api: {
+    get_user_data: {
+      params: { username: String },
+      result: { 
+        data: String,
+        count: Number
+      }
+    },
+    list_items: {
+      params: { limit: Number },
+      result: Array,
+      responseArray: true
+    }
+  }
+};
+
+const chain = await createHiveChain();
+const extended = chain.extend(customApiSchema);
+
+// Use custom method
+const userData = await extended.api.custom_api.get_user_data({
+  username: "alice"
+});
+
+console.log(userData.data);
+console.log(userData.count);
+```
+
+### Add custom REST endpoints
+
+Extend the chain with custom REST endpoints:
+
+```typescript
+const customRestSchema = {
+  custom_rest: {
+    get_account: {
+      params: { account: String },
+      result: { name: String, balance: String },
+      method: "GET",
+      urlPath: "/accounts/{account}"
+    },
+    create_item: {
+      params: { name: String, value: Number },
+      result: { id: Number },
+      method: "POST",
+      urlPath: "/items"
+    }
+  }
+};
+
+const extended = chain.extendRest(customRestSchema);
+
+// GET request
+const account = await extended.restApi.custom_rest.get_account({
+  account: "alice"
+});
+
+// POST request
+const result = await extended.restApi.custom_rest.create_item({
+  name: "test",
+  value: 42
+});
+```
+
+## Request/response interception
+
+Intercept and modify API requests and responses:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const chainWithLogging = chain.withProxy(
+  // Request interceptor
+  (requestData) => {
+    console.log("[Request]");
+    console.log(`  URL: ${requestData.url}`);
+    console.log(`  Method: ${requestData.method}`);
+    console.log(`  Data:`, requestData.data);
+    return requestData;
+  },
+  // Response interceptor
+  (responseData, requestData) => {
+    console.log("[Response]");
+    console.log(`  Status: ${responseData.status}`);
+    console.log(`  Data:`, responseData.response);
+    return responseData;
+  }
+);
+
+// All API calls through chainWithLogging are logged
+const props = await chainWithLogging.api.database_api.get_dynamic_global_properties({});
+```
+
+Use cases:
+
+- **Logging** - Track all API calls for debugging
+- **Authentication** - Add auth headers to requests
+- **Retry logic** - Retry failed requests automatically
+- **Caching** - Cache responses for repeated queries
+- **Metrics** - Collect performance metrics
+
+## Error handling
+
+Handle API errors gracefully:
+
+```typescript
+import { createHiveChain, WaxChainApiError } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+try {
+  const result = await chain.api.database_api.find_accounts({
+    accounts: ["nonexistent-account-123456789"]
+  });
+} catch (error) {
+  if (error instanceof WaxChainApiError) {
+    console.error("API Error:", error.message);
+    console.error("Request URL:", error.requestData.url);
+    console.error("Request data:", error.requestData.data);
+    console.error("Response status:", error.responseData.status);
+    console.error("Response data:", error.responseData.response);
+  } else {
+    console.error("Unknown error:", error);
+  }
+}
+```
+
+## Timeout configuration
+
+Configure API timeouts:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain({
+  apiTimeout: 10000 // 10 seconds
+});
+
+// Or set to 0 to disable timeout
+const noTimeout = await createHiveChain({
+  apiTimeout: 0
+});
+```
+
+## Complete example
+
+A comprehensive API usage example:
+
+```typescript
+import { createHiveChain, EManabarType } from "@hiveio/wax";
+
+// Initialize chain
+const chain = await createHiveChain({
+  apiEndpoint: "https://api.hive.blog",
+  apiTimeout: 5000
+});
+
+console.log("Connected to:", chain.endpointUrl);
+
+// Get dynamic global properties
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+console.log(`Head block: ${props.head_block_number}`);
+console.log(`Time: ${props.time}`);
+
+const now = new Date(props.time).getTime() / 1000;
+
+// Get account information
+const accountData = await chain.api.database_api.find_accounts({
+  accounts: ["alice"],
+  delayed_votes_active: true
+});
+
+const account = accountData.accounts[0];
+console.log(`\nAccount: ${account.name}`);
+console.log(`Balance: ${account.balance}`);
+console.log(`HBD: ${account.hbd_balance}`);
+console.log(`VESTS: ${account.vesting_shares}`);
+
+// Calculate voting manabar
+const upvoteManabar = chain.calculateAccountMana(account, now, EManabarType.UPVOTE);
+console.log(`Upvote mana: ${upvoteManabar.percent}%`);
+
+const downvoteManabar = chain.calculateAccountMana(account, now, EManabarType.DOWNVOTE);
+console.log(`Downvote mana: ${downvoteManabar.percent}%`);
+
+// Get resource credits
+const rcData = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+if (rcData.rc_accounts.length > 0) {
+  const rc = rcData.rc_accounts[0];
+  const rcManabar = chain.calculateCurrentManabarValue(
+    now,
+    rc.max_rc,
+    rc.rc_manabar.current_mana,
+    rc.rc_manabar.last_update_time
+  );
+  console.log(`RC mana: ${rcManabar.percent}%`);
+}
+
+// Get latest block
+const blockData = await chain.api.block_api.get_block({
+  block_num: props.head_block_number
+});
+
+console.log(`\nLatest block: ${blockData.block.block_id}`);
+console.log(`Witness: ${blockData.block.witness}`);
+console.log(`Transactions: ${blockData.block.transactions.length}`);
+
+// Get witnesses
+const witnesses = await chain.api.database_api.find_witnesses({
+  owners: ["gtg", "blocktrades"]
+});
+
+console.log("\nTop witnesses:");
+for (const witness of witnesses.witnesses) {
+  console.log(`  ${witness.owner}: ${witness.votes} votes`);
+}
+```
+
+## Next steps
+
+Explore more SDK capabilities:
+
+- Integrate with [frameworks](/typescript/framework-integration)
+- Study [working examples](/typescript/examples)
+- Read about [transaction building](/typescript/transactions)

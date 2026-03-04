@@ -1,0 +1,321 @@
+---
+title: Installation
+description: Install and configure the WAX TypeScript SDK in your project
+---
+
+Install the WAX TypeScript SDK using your preferred package manager.
+
+## Install the package
+
+<CodeGroup>
+
+```bash npm
+npm install @hiveio/wax
+```
+
+```bash yarn
+yarn add @hiveio/wax
+```
+
+```bash pnpm
+pnpm add @hiveio/wax
+```
+
+</CodeGroup>
+
+The package includes TypeScript definitions and works in all JavaScript/TypeScript environments.
+
+## Requirements
+
+Your environment needs:
+
+- **Node.js** 20.11+ or 21.2+ (for Node.js applications)
+- **Modern browsers** with WebAssembly support (Chrome 57+, Firefox 52+, Safari 11+, Edge 16+)
+- **Build tools** configured for WASM (see framework-specific guides below)
+
+## Basic setup
+
+Import and initialize the SDK:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+console.log(chain.getVersion());
+```
+
+For offline operations only:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+console.log(wax.getVersion());
+```
+
+## Configuration options
+
+### Chain configuration
+
+Customize the chain connection:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain({
+  chainId: "beeab0de00000000000000000000000000000000000000000000000000000000", // Mainnet (default)
+  apiEndpoint: "https://api.hive.blog", // API node URL (default)
+  restApiEndpoint: "https://api.syncad.com", // REST API URL (default)
+  apiTimeout: 2000, // Request timeout in milliseconds (default: 2000)
+  waxApiCaller: "my-app/1.0.0" // Optional identifier for your application
+});
+```
+
+### WASM location
+
+Specify a custom WASM file location:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation({
+  wasmLocation: "/path/to/wax.common.wasm"
+});
+```
+
+For bundlers, import the WASM file:
+
+<CodeGroup>
+
+```typescript Vite
+import wasmUrl from '@hiveio/wax/lib/build_wasm/wax.common.wasm?url';
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation({ wasmLocation: wasmUrl });
+```
+
+```typescript Webpack
+const wasmUrl = new URL('@hiveio/wax/lib/build_wasm/wax.common.wasm', import.meta.url).href;
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation({ wasmLocation: wasmUrl });
+```
+
+</CodeGroup>
+
+## Framework-specific setup
+
+### Vite
+
+Vite handles WASM automatically. No additional configuration needed:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+```
+
+### Webpack 5
+
+Enable WASM support in `webpack.config.js`:
+
+```javascript
+module.exports = {
+  experiments: {
+    asyncWebAssembly: true
+  }
+};
+```
+
+### Next.js
+
+For Next.js 13+ with App Router, add to `next.config.js`:
+
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true
+    };
+    return config;
+  }
+};
+
+module.exports = nextConfig;
+```
+
+Import WAX in client components:
+
+```typescript
+"use client";
+
+import { createWaxFoundation } from "@hiveio/wax";
+import { useEffect, useState } from "react";
+
+export default function MyComponent() {
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    createWaxFoundation().then((wax) => {
+      setVersion(wax.getVersion());
+    });
+  }, []);
+
+  return <div>WAX version: {version}</div>;
+}
+```
+
+### Nuxt
+
+WAX supports both SSR and client-side rendering in Nuxt:
+
+```vue
+<script setup>
+import { createWaxFoundation } from "@hiveio/wax";
+import { ref } from 'vue';
+
+const version = ref('');
+
+if (process.server) {
+  // Server-side initialization
+  const wax = await createWaxFoundation();
+  version.value = wax.getVersion();
+} else {
+  // Client-side initialization
+  onBeforeMount(async () => {
+    const wax = await createWaxFoundation();
+    version.value = wax.getVersion();
+  });
+}
+</script>
+
+<template>
+  <div>{{ version }}</div>
+</template>
+```
+
+### Node.js
+
+WAX works in Node.js without additional configuration:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log(`Head block: ${props.head_block_number}`);
+```
+
+Make sure your `package.json` includes:
+
+```json
+{
+  "type": "module"
+}
+```
+
+## TypeScript configuration
+
+For optimal TypeScript support, ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM"],
+    "strict": true
+  }
+}
+```
+
+## Verify installation
+
+Create a test file to verify everything works:
+
+```typescript test.ts
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+console.log(`WAX version: ${wax.getVersion()}`);
+console.log(`Chain ID: ${wax.chainId}`);
+console.log(`Address prefix: ${wax.addressPrefix}`);
+```
+
+Run it:
+
+```bash
+node test.ts
+```
+
+Expected output:
+
+```
+WAX version: 1.27.x.x
+Chain ID: beeab0de00000000000000000000000000000000000000000000000000000000
+Address prefix: STM
+```
+
+## Installing signer packages
+
+For transaction signing, install a signer package:
+
+<CodeGroup>
+
+```bash Beekeeper
+npm install @hiveio/wax-signers-beekeeper
+```
+
+```bash Keychain
+npm install @hiveio/wax-signers-keychain
+```
+
+```bash MetaMask
+npm install @hiveio/wax-signers-metamask
+```
+
+```bash PeakVault
+npm install @hiveio/wax-signers-peakvault
+```
+
+</CodeGroup>
+
+See the [transaction signing documentation](/typescript/transactions#signing-transactions) for usage details.
+
+## Troubleshooting
+
+### WASM loading errors
+
+If you see WASM loading errors, verify:
+
+1. Your bundler supports WebAssembly
+2. The WASM file path is correct
+3. Your server serves `.wasm` files with the correct MIME type (`application/wasm`)
+
+### Module resolution errors
+
+For TypeScript errors about module resolution:
+
+1. Ensure `moduleResolution` is set to `"bundler"` or `"node16"`
+2. Check that `@hiveio/wax` is installed in `node_modules`
+3. Restart your TypeScript language server
+
+### Bundle size issues
+
+The WASM module is approximately 1.5 MB. For optimal loading:
+
+1. Enable compression on your web server (gzip or brotli)
+2. Use code splitting to load WAX only when needed
+3. Consider using a CDN for the WASM file
+
+## Next steps
+
+Now that you have WAX installed:
+
+- Learn about [createWaxFoundation](/typescript/wax-foundation) for offline operations
+- Explore [createHiveChain](/typescript/hive-chain) for online operations
+- Start building [transactions](/typescript/transactions)

@@ -1,0 +1,590 @@
+---
+title: "Broadcasting transactions"
+description: "Broadcasting transactions to the Hive network"
+---
+
+After building and signing a transaction, the final step is broadcasting it to the Hive network. This guide covers the broadcasting process and how to handle responses.
+
+## Prerequisites
+
+Before broadcasting, ensure your transaction is:
+
+<Steps>
+  <Step title="Built with valid operations">
+    Your transaction must contain at least one operation.
+
+    ```typescript
+    console.log('Operations:', tx.transaction.operations.length);
+    ```
+  </Step>
+
+  <Step title="Properly signed">
+    The transaction must have valid signatures for all required authorities.
+
+    ```typescript
+    if (!tx.isSigned()) {
+      throw new Error('Transaction must be signed before broadcasting');
+    }
+    ```
+  </Step>
+
+  <Step title="Validated">
+    Run validation to catch any errors before broadcasting.
+
+    ```typescript
+    tx.validate();
+    ```
+  </Step>
+</Steps>
+
+## Basic broadcasting
+
+Use the `broadcast()` method on your chain instance to send a transaction to the network.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import beekeeperFactory from '@hiveio/beekeeper';
+
+    async function broadcastTransaction() {
+      // Initialize chain
+      const chain = await createHiveChain();
+
+      // Create and build transaction
+      const tx = await chain.createTransaction();
+      tx.pushOperation({
+        vote_operation: {
+          voter: "alice",
+          author: "bob",
+          permlink: "example-post",
+          weight: 10000
+        }
+      });
+
+      // Sign transaction
+      const beekeeper = await beekeeperFactory();
+      const session = beekeeper.createSession('my-app');
+      const { wallet } = await session.createWallet('my-wallet');
+      await wallet.importKey(privateKey);
+      const [publicKey] = wallet.getPublicKeys();
+      
+      tx.sign(wallet, publicKey);
+
+      // Broadcast to network
+      try {
+        await chain.broadcast(tx.transaction);
+        console.log('Transaction broadcast successfully!');
+        console.log('Transaction ID:', tx.id);
+      } catch (error) {
+        console.error('Broadcast failed:', error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from beekeepy import AsyncBeekeeper
+    from wax import create_hive_chain
+    from wax.proto.operations import vote
+
+    async def broadcast_transaction():
+        # Initialize chain
+        chain = create_hive_chain()
+
+        # Create and build transaction
+        tx = await chain.create_transaction()
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="example-post",
+                weight=10000
+            )
+        )
+
+        # Sign transaction
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="my-app")
+            wallet = await session.create_wallet(
+                name="my-wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key=private_key)
+            pub_keys = await wallet.public_keys
+            public_key = pub_keys[0]
+            
+            await tx.sign(wallet=wallet, public_key=public_key)
+
+            # Broadcast to network
+            try:
+                await chain.broadcast(tx.transaction)
+                print('Transaction broadcast successfully!')
+                print(f'Transaction ID: {tx.id}')
+            except Exception as error:
+                print(f'Broadcast failed: {error}')
+
+    asyncio.run(broadcast_transaction())
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Broadcasting is an asynchronous operation. It sends your transaction to the network where it will be included in a block by witness nodes.
+</Note>
+
+## Broadcasting with custom endpoint
+
+You can specify a custom API endpoint when creating your chain instance.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+
+    // Use a specific API node
+    const chain = await createHiveChain({
+      endpoint_url: 'https://api.hive.blog'
+    });
+
+    // Or use a different network (testnet)
+    const testnetChain = await createHiveChain({
+      endpoint_url: 'https://testnet.openhive.network',
+      chainId: '42' // Testnet chain ID
+    });
+
+    await chain.broadcast(tx.transaction);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from wax import create_hive_chain, WaxChainOptions
+
+    # Use a specific API node
+    chain = create_hive_chain(
+        WaxChainOptions(endpoint_url='https://api.hive.blog')
+    )
+
+    # Or use a different network (testnet)
+    testnet_chain = create_hive_chain(
+        WaxChainOptions(
+            endpoint_url='https://testnet.openhive.network',
+            chain_id='42'  # Testnet chain ID
+        )
+    )
+
+    await chain.broadcast(tx.transaction)
+    ```
+  </Tab>
+</Tabs>
+
+## Handling broadcast responses
+
+The broadcast method doesn't return much data, but you can check the transaction status using the transaction ID.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    async function broadcastAndVerify() {
+      const chain = await createHiveChain();
+      const tx = await chain.createTransaction();
+      
+      // Build and sign transaction...
+      
+      const txId = tx.id;
+      console.log('Transaction ID:', txId);
+
+      try {
+        // Broadcast
+        await chain.broadcast(tx.transaction);
+        console.log('✓ Transaction broadcast successfully');
+
+        // Wait a moment for the transaction to be included
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Verify transaction was included
+        const result = await chain.api.database_api.get_transaction({
+          id: txId
+        });
+
+        if (result) {
+          console.log('✓ Transaction confirmed in block:', result.block_num);
+        }
+      } catch (error) {
+        console.error('✗ Broadcast failed:', error.message);
+        throw error;
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from wax import create_hive_chain
+
+    async def broadcast_and_verify():
+        chain = create_hive_chain()
+        tx = await chain.create_transaction()
+        
+        # Build and sign transaction...
+        
+        tx_id = tx.id
+        print(f'Transaction ID: {tx_id}')
+
+        try:
+            # Broadcast
+            await chain.broadcast(tx.transaction)
+            print('✓ Transaction broadcast successfully')
+
+            # Wait a moment for the transaction to be included
+            await asyncio.sleep(3)
+
+            # Verify transaction was included
+            result = await chain.api.database_api.get_transaction(id=tx_id)
+
+            if result:
+                print(f'✓ Transaction confirmed in block: {result.block_num}')
+        except Exception as error:
+            print(f'✗ Broadcast failed: {error}')
+            raise
+
+    asyncio.run(broadcast_and_verify())
+    ```
+  </Tab>
+</Tabs>
+
+## Common broadcast errors
+
+Understanding common errors helps you handle them appropriately.
+
+<AccordionGroup>
+  <Accordion title="Missing required authority">
+    **Error**: `Missing Active Authority` or `Missing Posting Authority`
+
+    **Cause**: The transaction wasn't signed with the correct authority level.
+
+    **Solution**: Check required authorities and sign with the correct key.
+
+    ```typescript
+    const authorities = tx.requiredAuthorities;
+    console.log('Required authorities:', authorities);
+    // Make sure you sign with a key that has the required authority
+    ```
+  </Accordion>
+
+  <Accordion title="Duplicate transaction">
+    **Error**: `Duplicate transaction check failed`
+
+    **Cause**: The same transaction was already broadcast.
+
+    **Solution**: Create a new transaction or wait for the previous one to expire.
+
+    ```typescript
+    // Don't broadcast the same transaction twice
+    // Create a new transaction if you need to retry
+    const newTx = await chain.createTransaction();
+    ```
+  </Accordion>
+
+  <Accordion title="Transaction expired">
+    **Error**: `Transaction expired`
+
+    **Cause**: The transaction's expiration time has passed.
+
+    **Solution**: Create a new transaction with a fresh expiration time.
+
+    ```typescript
+    // Transactions expire after 1 minute by default
+    // Create transactions close to when you'll broadcast them
+    const tx = await chain.createTransaction({
+      expirationTime: "+5m" // Give yourself more time if needed
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Invalid signature">
+    **Error**: `Invalid signature`
+
+    **Cause**: The signature doesn't match the transaction or was created with wrong chain ID.
+
+    **Solution**: Ensure you're using the correct chain ID and signing properly.
+
+    ```typescript
+    // Make sure chain ID matches the network
+    console.log('Chain ID:', chain.chainId);
+    
+    // Validate before signing
+    tx.validate();
+    ```
+  </Accordion>
+
+  <Accordion title="Insufficient funds">
+    **Error**: `Insufficient funds` or `Account does not have sufficient funds`
+
+    **Cause**: The account doesn't have enough balance for the operation.
+
+    **Solution**: Check account balance before creating transfer operations.
+
+    ```typescript
+    // Check balance before transferring
+    const accounts = await chain.api.database_api.find_accounts({
+      accounts: ['alice']
+    });
+    console.log('Balance:', accounts.accounts[0].balance);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Broadcasting with retry logic
+
+Implement retry logic to handle temporary network issues.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    async function broadcastWithRetry(
+      chain: any,
+      tx: any,
+      maxRetries: number = 3,
+      retryDelay: number = 1000
+    ) {
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Broadcast attempt ${attempt}/${maxRetries}`);
+          await chain.broadcast(tx.transaction);
+          console.log('✓ Broadcast successful');
+          return true;
+        } catch (error) {
+          lastError = error as Error;
+          console.warn(`Attempt ${attempt} failed:`, error.message);
+
+          // Don't retry certain errors
+          if (
+            error.message.includes('Duplicate transaction') ||
+            error.message.includes('expired') ||
+            error.message.includes('Invalid signature')
+          ) {
+            throw error;
+          }
+
+          if (attempt < maxRetries) {
+            console.log(`Retrying in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
+        }
+      }
+
+      throw lastError || new Error('Broadcast failed after retries');
+    }
+
+    // Usage
+    try {
+      await broadcastWithRetry(chain, tx);
+    } catch (error) {
+      console.error('All broadcast attempts failed:', error);
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from typing import Any
+
+    async def broadcast_with_retry(
+        chain: Any,
+        tx: Any,
+        max_retries: int = 3,
+        retry_delay: float = 1.0
+    ) -> bool:
+        last_error: Exception | None = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                print(f'Broadcast attempt {attempt}/{max_retries}')
+                await chain.broadcast(tx.transaction)
+                print('✓ Broadcast successful')
+                return True
+            except Exception as error:
+                last_error = error
+                print(f'Attempt {attempt} failed: {error}')
+
+                # Don't retry certain errors
+                error_msg = str(error).lower()
+                if (
+                    'duplicate transaction' in error_msg or
+                    'expired' in error_msg or
+                    'invalid signature' in error_msg
+                ):
+                    raise
+
+                if attempt < max_retries:
+                    print(f'Retrying in {retry_delay}s...')
+                    await asyncio.sleep(retry_delay)
+
+        raise last_error or Exception('Broadcast failed after retries')
+
+    # Usage
+    try:
+        await broadcast_with_retry(chain, tx)
+    except Exception as error:
+        print(f'All broadcast attempts failed: {error}')
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+Here's a complete example that builds, signs, and broadcasts a transaction.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import beekeeperFactory from '@hiveio/beekeeper';
+
+    async function completeExample() {
+      // Step 1: Initialize
+      const chain = await createHiveChain();
+      const beekeeper = await beekeeperFactory();
+      const session = beekeeper.createSession('my-app');
+      const { wallet } = await session.createWallet('my-wallet');
+
+      // Step 2: Import key
+      const privateKey = process.env.PRIVATE_KEY!;
+      await wallet.importKey(privateKey);
+      const [publicKey] = wallet.getPublicKeys();
+
+      // Step 3: Build transaction
+      const tx = await chain.createTransaction();
+      tx.pushOperation({
+        transfer_operation: {
+          from_account: "alice",
+          to_account: "bob",
+          amount: chain.hive.satoshis(1),
+          memo: "hello from wax!"
+        }
+      });
+
+      // Step 4: Validate
+      tx.validate();
+      console.log('✓ Transaction valid');
+
+      // Step 5: Sign
+      tx.sign(wallet, publicKey);
+      console.log('✓ Transaction signed');
+      console.log('Transaction ID:', tx.id);
+
+      // Step 6: Broadcast
+      try {
+        await chain.broadcast(tx.transaction);
+        console.log('✓ Transaction broadcast successfully!');
+        console.log('View on explorer:', `https://hiveblocks.com/tx/${tx.id}`);
+      } catch (error) {
+        console.error('✗ Broadcast failed:', error);
+        throw error;
+      }
+    }
+
+    completeExample().catch(console.error);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os
+    import asyncio
+    from beekeepy import AsyncBeekeeper
+    from wax import create_hive_chain
+    from wax.proto.operations import transfer
+
+    async def complete_example():
+        # Step 1: Initialize
+        chain = create_hive_chain()
+        
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="my-app")
+            wallet = await session.create_wallet(
+                name="my-wallet",
+                password="password"
+            )
+
+            # Step 2: Import key
+            private_key = os.getenv('PRIVATE_KEY', '')
+            await wallet.import_key(private_key=private_key)
+            pub_keys = await wallet.public_keys
+            public_key = pub_keys[0]
+
+            # Step 3: Build transaction
+            tx = await chain.create_transaction()
+            tx.push_operation(
+                transfer(
+                    from_account="alice",
+                    to_account="bob",
+                    amount=chain.hive.satoshis(1),
+                    memo="hello from wax!"
+                )
+            )
+
+            # Step 4: Validate
+            tx.validate()
+            print('✓ Transaction valid')
+
+            # Step 5: Sign
+            await tx.sign(wallet=wallet, public_key=public_key)
+            print('✓ Transaction signed')
+            print(f'Transaction ID: {tx.id}')
+
+            # Step 6: Broadcast
+            try:
+                await chain.broadcast(tx.transaction)
+                print('✓ Transaction broadcast successfully!')
+                print(f'View on explorer: https://hiveblocks.com/tx/{tx.id}')
+            except Exception as error:
+                print(f'✗ Broadcast failed: {error}')
+                raise
+
+    asyncio.run(complete_example())
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<Card title="Broadcast checklist" icon="list-check">
+  Before broadcasting, ensure:
+  
+  - ✅ Transaction is validated
+  - ✅ Transaction is properly signed
+  - ✅ You're using the correct network (mainnet vs testnet)
+  - ✅ Account has sufficient funds for the operation
+  - ✅ You have error handling in place
+  - ✅ Transaction hasn't expired
+</Card>
+
+<Card title="After broadcasting" icon="clock">
+  After a successful broadcast:
+  
+  - ⏱️ Transactions typically appear in blocks within 3 seconds
+  - 🔍 Use the transaction ID to track status
+  - 📝 Save the transaction ID for your records
+  - ⚠️ Wait for irreversibility (about 1 minute) for critical operations
+</Card>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Complex operations" icon="puzzle-piece" href="/guides/complex-operations">
+    Learn about high-level operation helpers
+  </Card>
+  <Card title="API calls" icon="code" href="/typescript/api-calls">
+    Explore the Hive API for checking transaction status
+  </Card>
+  <Card title="Error handling" icon="triangle-exclamation" href="/resources/troubleshooting">
+    Comprehensive error handling guide
+  </Card>
+  <Card title="Network broadcast API" icon="tower-broadcast" href="/api/hive/network-broadcast-api">
+    API reference for broadcasting
+  </Card>
+</CardGroup>

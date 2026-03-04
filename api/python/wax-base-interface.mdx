@@ -1,0 +1,780 @@
+---
+title: Wax base interface
+description: Core offline blockchain operations including transaction creation, signing, and asset management
+---
+
+The `IWaxBaseInterface` provides all offline blockchain operations. It's the base interface returned by `create_wax_foundation()` and is also inherited by `IHiveChainInterface`.
+
+## Properties
+
+### chain_id
+
+Returns the chain identifier for the current instance.
+
+```python
+wax = create_wax_foundation()
+print(wax.chain_id)  # "beeab0de00000000000000000000000000000000000000000000000000000000"
+```
+
+<ResponseField name="chain_id" type="ChainId">
+  Hexadecimal string representing the chain ID.
+</ResponseField>
+
+---
+
+### config
+
+Returns the protocol configuration for the current chain.
+
+```python
+wax = create_wax_foundation()
+config = wax.config
+print(config["HIVE_CHAIN_ID"])
+print(config["HIVE_ADDRESS_PREFIX"])
+```
+
+<ResponseField name="config" type="ChainConfig">
+  Dictionary containing chain configuration parameters like `HIVE_CHAIN_ID`, `HIVE_ADDRESS_PREFIX`, block intervals, and other protocol constants.
+</ResponseField>
+
+---
+
+### address_prefix
+
+Returns the public key address prefix for the current chain.
+
+```python
+wax = create_wax_foundation()
+print(wax.address_prefix)  # "STM" for mainnet, "TST" for testnet
+```
+
+<ResponseField name="address_prefix" type="str">
+  Address prefix string used in public keys (e.g., "STM" for mainnet).
+</ResponseField>
+
+---
+
+## Asset factories
+
+### hive
+
+Provides methods to create HIVE assets in NAI format.
+
+```python
+wax = create_wax_foundation()
+
+# Create from decimal amount (with precision)
+hive_amount = wax.hive.coins(10.5)  # 10.5 HIVE
+
+# Create from satoshis (without precision)
+hive_amount = wax.hive.satoshis(10500)  # 10.500 HIVE
+```
+
+<ResponseField name="hive" type="AssetFactory">
+  Factory object with `coins()` and `satoshis()` methods for creating HIVE assets.
+  
+  <Expandable title="Methods">
+    <ResponseField name="coins" type="(amount: AssetAmount) -> NaiAsset">
+      Creates HIVE asset from decimal amount (applies 3-decimal precision).
+    </ResponseField>
+    <ResponseField name="satoshis" type="(amount: int) -> NaiAsset">
+      Creates HIVE asset from integer satoshis (no precision applied).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### hbd
+
+Provides methods to create HBD (Hive Backed Dollar) assets in NAI format.
+
+```python
+wax = create_wax_foundation()
+
+# Create from decimal amount
+hbd_amount = wax.hbd.coins(5.25)  # 5.25 HBD
+
+# Create from satoshis
+hbd_amount = wax.hbd.satoshis(5250)  # 5.250 HBD
+```
+
+<ResponseField name="hbd" type="AssetFactory">
+  Factory object with `coins()` and `satoshis()` methods for creating HBD assets.
+</ResponseField>
+
+---
+
+### vests
+
+Provides methods to create VESTS (Hive Power) assets in NAI format.
+
+```python
+wax = create_wax_foundation()
+
+# Create from decimal amount
+vests_amount = wax.vests.coins(1000000.123456)  # 1000000.123456 VESTS
+
+# Create from satoshis
+vests_amount = wax.vests.satoshis(1000000123456)  # With 6-decimal precision
+```
+
+<ResponseField name="vests" type="AssetFactory">
+  Factory object with `coins()` and `satoshis()` methods for creating VESTS assets (6-decimal precision).
+</ResponseField>
+
+---
+
+## Transaction creation
+
+### create_transaction_with_tapos
+
+Creates a transaction object with TAPOS (Transaction as Proof of Stake) data.
+
+```python
+wax = create_wax_foundation()
+
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000beef...",
+    expiration=timedelta(minutes=5)
+)
+```
+
+<ParamField path="tapos_block_id" type="str" required>
+  Block ID (usually the head block) that the transaction references for TAPOS.
+</ParamField>
+
+<ParamField path="expiration" type="TTimestamp | None" default="timedelta(minutes=1)">
+  Time until transaction expires. Can be a `datetime` (absolute UTC time) or `timedelta` (relative duration). Defaults to 1 minute from now.
+</ParamField>
+
+<ResponseField name="return" type="ITransaction">
+  Transaction object ready for operations to be pushed.
+</ResponseField>
+
+---
+
+### create_transaction_from_proto
+
+Creates a transaction object from a proto transaction.
+
+```python
+from wax.proto.transaction import transaction as proto_transaction
+
+wax = create_wax_foundation()
+proto_tx = proto_transaction()
+proto_tx.ref_block_num = 48879
+proto_tx.ref_block_prefix = 123456
+
+tx = wax.create_transaction_from_proto(proto_tx)
+```
+
+<ParamField path="transaction" type="ProtoTransaction" required>
+  Proto transaction object to convert.
+</ParamField>
+
+<ResponseField name="return" type="ITransaction">
+  Transaction object.
+</ResponseField>
+
+---
+
+### create_transaction_from_json
+
+Creates a transaction object from a JSON transaction.
+
+```python
+wax = create_wax_foundation()
+
+json_tx = '{"ref_block_num":48879,"ref_block_prefix":123456,...}'
+tx = wax.create_transaction_from_json(json_tx)
+```
+
+<ParamField path="transaction" type="JsonTransaction" required>
+  JSON string or dict representing the transaction.
+</ParamField>
+
+<ResponseField name="return" type="ITransaction">
+  Transaction object.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if the transaction JSON is invalid.
+
+---
+
+## Validation methods
+
+### is_valid_account_name
+
+Checks if an account name is valid according to Hive rules.
+
+```python
+wax = create_wax_foundation()
+
+wax.is_valid_account_name("alice")  # True
+wax.is_valid_account_name("Alice")  # False (uppercase not allowed)
+wax.is_valid_account_name("a")      # False (too short)
+wax.is_valid_account_name("this-is-a-very-long-account-name")  # False (too long)
+```
+
+<ParamField path="account_name" type="AccountName" required>
+  Account name to validate.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `True` if the account name is valid, `False` otherwise.
+</ResponseField>
+
+---
+
+### get_operation_impacted_accounts
+
+Retrieves the list of account names impacted by a given operation.
+
+```python
+from wax import create_wax_foundation
+from wax.proto.operations import transfer
+
+wax = create_wax_foundation()
+
+op = transfer(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.satoshis(1000),
+    memo="test"
+)
+
+accounts = wax.get_operation_impacted_accounts(op)
+print(accounts)  # ["alice", "bob"]
+```
+
+<ParamField path="operation" type="Operation" required>
+  Operation in HF26 format or proto operation.
+</ParamField>
+
+<ResponseField name="return" type="list[AccountName]">
+  List of account names impacted by the operation.
+</ResponseField>
+
+**Raises:** `InvalidOperationFormatError` or `WaxValidationFailedError` if the operation is invalid.
+
+---
+
+## Cryptographic operations
+
+### suggest_brain_key
+
+Generates a new brain key with associated private and public keys.
+
+```python
+wax = create_wax_foundation()
+
+brain_key_data = wax.suggest_brain_key()
+print(brain_key_data.brain_key)  # "WORD WORD WORD..."
+print(brain_key_data.wif_private_key)  # "5J..."
+print(brain_key_data.associated_public_key)  # "STM..."
+```
+
+<ResponseField name="return" type="IBrainKeyData">
+  Object containing:
+  - `brain_key`: Space-separated list of 16 random words
+  - `wif_private_key`: First private key derived from the brain key
+  - `associated_public_key`: Public key in WIF format
+</ResponseField>
+
+---
+
+### get_private_key_from_password
+
+Derives a private key from an account name, role, and master password.
+
+```python
+wax = create_wax_foundation()
+
+key_data = wax.get_private_key_from_password(
+    account="alice",
+    role="posting",
+    password="my-master-password"
+)
+
+print(key_data.wif_private_key)  # "5J..."
+print(key_data.associated_public_key)  # "STM..."
+```
+
+<ParamField path="account" type="AccountName" required>
+  Account name.
+</ParamField>
+
+<ParamField path="role" type="str" required>
+  Key role: `"active"`, `"owner"`, `"posting"`, or `"memo"`.
+</ParamField>
+
+<ParamField path="password" type="str" required>
+  Master password to derive the key from.
+</ParamField>
+
+<ResponseField name="return" type="IPrivateKeyData">
+  Object containing:
+  - `wif_private_key`: Derived private key in WIF format
+  - `associated_public_key`: Associated public key in WIF format
+</ResponseField>
+
+---
+
+### get_public_key_from_signature
+
+Retrieves the public key from a signature and signature digest.
+
+```python
+wax = create_wax_foundation()
+
+public_key = wax.get_public_key_from_signature(
+    sig_digest="abcd1234...",
+    signature="1f2e3d..."
+)
+print(public_key)  # "STM..."
+```
+
+<ParamField path="sig_digest" type="Hex" required>
+  Signature digest in hexadecimal format.
+</ParamField>
+
+<ParamField path="signature" type="Signature" required>
+  Signature in hexadecimal format.
+</ParamField>
+
+<ResponseField name="return" type="PublicKey">
+  Public key in WIF format that was used to create the signature.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if parameters are invalid.
+
+---
+
+### scan_text_for_matching_private_keys
+
+Scans content for private keys that match account authorities.
+
+```python
+wax = create_wax_foundation()
+
+try:
+    wax.scan_text_for_matching_private_keys(
+        content="Some text with private key 5J...",
+        account="alice",
+        account_authorities=authorities,
+        memo_key="STM...",
+        other_keys=[]
+    )
+except PrivateKeyDetectedInMemoError:
+    print("Warning: Private key detected!")
+```
+
+<ParamField path="content" type="str" required>
+  Text content to scan for private keys.
+</ParamField>
+
+<ParamField path="account" type="AccountName" required>
+  Account name to check keys against.
+</ParamField>
+
+<ParamField path="account_authorities" type="WaxAuthorities" required>
+  Account's authority structure.
+</ParamField>
+
+<ParamField path="memo_key" type="PublicKey" required>
+  Account's memo key.
+</ParamField>
+
+<ParamField path="other_keys" type="list[PublicKey] | None" default="None">
+  Additional keys to check.
+</ParamField>
+
+**Raises:** `PrivateKeyDetectedInMemoError` if a matching private key is found in the content.
+
+---
+
+## Asset conversions
+
+### vests_to_hp
+
+Converts VESTS to Hive Power (HP).
+
+```python
+wax = create_wax_foundation()
+
+hp = wax.vests_to_hp(
+    vests=wax.vests.coins(1000000),
+    total_vesting_fund_hive=wax.hive.coins(500000),
+    total_vesting_shares=wax.vests.coins(1000000000)
+)
+
+print(hp.amount)  # HP amount
+```
+
+<ParamField path="vests" type="VestsNaiAssetConvertible" required>
+  VESTS amount to convert.
+</ParamField>
+
+<ParamField path="total_vesting_fund_hive" type="HiveNaiAssetConvertible" required>
+  Total vesting fund in HIVE (from dynamic global properties).
+</ParamField>
+
+<ParamField path="total_vesting_shares" type="VestsNaiAssetConvertible" required>
+  Total vesting shares in VESTS (from dynamic global properties).
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Converted amount in HIVE (HP).
+</ResponseField>
+
+**Raises:** Asset conversion errors if inputs are invalid.
+
+---
+
+### hbd_to_hive
+
+Converts HBD to HIVE using current price feed.
+
+```python
+wax = create_wax_foundation()
+
+hive = wax.hbd_to_hive(
+    hbd=wax.hbd.coins(10),
+    base=wax.hbd.coins(1),
+    quote=wax.hive.coins(0.5)
+)
+
+print(hive.amount)  # HIVE equivalent
+```
+
+<ParamField path="hbd" type="HbdNaiAssetConvertible" required>
+  HBD amount to convert.
+</ParamField>
+
+<ParamField path="base" type="HbdNaiAssetConvertible" required>
+  Price feed base (HBD).
+</ParamField>
+
+<ParamField path="quote" type="HiveNaiAssetConvertible" required>
+  Price feed quote (HIVE).
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Converted amount in HIVE.
+</ResponseField>
+
+---
+
+### hive_to_hbd
+
+Converts HIVE to HBD using current price feed.
+
+```python
+wax = create_wax_foundation()
+
+hbd = wax.hive_to_hbd(
+    hive=wax.hive.coins(10),
+    base=wax.hbd.coins(1),
+    quote=wax.hive.coins(0.5)
+)
+
+print(hbd.amount)  # HBD equivalent
+```
+
+<ParamField path="hive" type="HiveNaiAssetConvertible" required>
+  HIVE amount to convert.
+</ParamField>
+
+<ParamField path="base" type="HbdNaiAssetConvertible" required>
+  Price feed base (HBD).
+</ParamField>
+
+<ParamField path="quote" type="HiveNaiAssetConvertible" required>
+  Price feed quote (HIVE).
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Converted amount in HBD.
+</ResponseField>
+
+---
+
+## Calculation methods
+
+### calculate_current_manabar_value
+
+Calculates the current manabar value and percentage.
+
+```python
+from datetime import datetime
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+manabar = wax.calculate_current_manabar_value(
+    head_block_time=datetime.now(),
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1234567890
+)
+
+print(f"Current: {manabar.current_mana}")
+print(f"Max: {manabar.max_mana}")
+print(f"Percent: {manabar.percent}%")
+```
+
+<ParamField path="head_block_time" type="datetime" required>
+  Current head block time from dynamic global properties.
+</ParamField>
+
+<ParamField path="max_mana" type="int" required>
+  Maximum mana value for the account.
+</ParamField>
+
+<ParamField path="current_mana" type="int" required>
+  Current mana value from account data.
+</ParamField>
+
+<ParamField path="last_update_time" type="int" required>
+  Last manabar update time from account data.
+</ParamField>
+
+<ResponseField name="return" type="IManabarData">
+  Object containing:
+  - `max_mana`: Maximum mana
+  - `current_mana`: Current regenerated mana
+  - `percent`: Manabar percentage (0-100)
+</ResponseField>
+
+---
+
+### calculate_manabar_full_regeneration_time
+
+Calculates when the manabar will be fully regenerated.
+
+```python
+from datetime import datetime
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+regen_time = wax.calculate_manabar_full_regeneration_time(
+    head_block_time=datetime.now(),
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1234567890
+)
+
+print(f"Full regen at: {regen_time}")
+```
+
+<ParamField path="head_block_time" type="datetime" required>
+  Current head block time.
+</ParamField>
+
+<ParamField path="max_mana" type="int" required>
+  Maximum mana value.
+</ParamField>
+
+<ParamField path="current_mana" type="int" required>
+  Current mana value.
+</ParamField>
+
+<ParamField path="last_update_time" type="int" required>
+  Last update time.
+</ParamField>
+
+<ResponseField name="return" type="datetime">
+  Datetime when the manabar will be fully regenerated.
+</ResponseField>
+
+---
+
+### calculate_account_hp
+
+Calculates account Hive Power from VESTS.
+
+```python
+wax = create_wax_foundation()
+
+hp = wax.calculate_account_hp(
+    vests=wax.vests.coins(1000000),
+    total_vesting_fund_hive=wax.hive.coins(500000),
+    total_vesting_shares=wax.vests.coins(1000000000)
+)
+```
+
+<ParamField path="vests" type="VestsNaiAssetConvertible" required>
+  Account VESTS.
+</ParamField>
+
+<ParamField path="total_vesting_fund_hive" type="HiveNaiAssetConvertible" required>
+  Total vesting fund in HIVE.
+</ParamField>
+
+<ParamField path="total_vesting_shares" type="VestsNaiAssetConvertible" required>
+  Total vesting shares.
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Calculated HP (HIVE).
+</ResponseField>
+
+---
+
+### calculate_witness_votes_hp
+
+Calculates witness votes in HP terms.
+
+```python
+wax = create_wax_foundation()
+
+votes_hp = wax.calculate_witness_votes_hp(
+    number=1000000000,
+    total_vesting_fund_hive=wax.hive.coins(500000),
+    total_vesting_shares=wax.vests.coins(1000000000)
+)
+```
+
+<ParamField path="number" type="int" required>
+  Witness vote count.
+</ParamField>
+
+<ParamField path="total_vesting_fund_hive" type="HiveNaiAssetConvertible" required>
+  Total vesting fund in HIVE.
+</ParamField>
+
+<ParamField path="total_vesting_shares" type="VestsNaiAssetConvertible" required>
+  Total vesting shares.
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Witness votes in HP (HIVE).
+</ResponseField>
+
+---
+
+### calculate_hp_apr
+
+Calculates the Hive Power annual percentage rate.
+
+```python
+wax = create_wax_foundation()
+
+apr = wax.calculate_hp_apr(
+    head_block_num=12345678,
+    vesting_reward_percent=5000,
+    virtual_supply=wax.hive.coins(500000000),
+    total_vesting_fund_hive=wax.hive.coins(200000000)
+)
+
+print(f"HP APR: {apr}%")
+```
+
+<ParamField path="head_block_num" type="int" required>
+  Current head block number.
+</ParamField>
+
+<ParamField path="vesting_reward_percent" type="int" required>
+  Vesting reward percent (basis points).
+</ParamField>
+
+<ParamField path="virtual_supply" type="HiveNaiAssetConvertible" required>
+  Virtual HIVE supply.
+</ParamField>
+
+<ParamField path="total_vesting_fund_hive" type="HiveNaiAssetConvertible" required>
+  Total vesting fund in HIVE.
+</ParamField>
+
+<ResponseField name="return" type="Decimal">
+  HP APR percentage with 2 decimal places.
+</ResponseField>
+
+---
+
+### estimate_hive_collateral
+
+Estimates HIVE collateral needed for HBD conversion.
+
+```python
+wax = create_wax_foundation()
+
+collateral = wax.estimate_hive_collateral(
+    current_median_history_base=wax.hbd.coins(1),
+    current_median_history_quote=wax.hive.coins(0.5),
+    current_min_history_base=wax.hbd.coins(1),
+    current_min_history_quote=wax.hive.coins(0.48),
+    hbd_amount_to_get=wax.hbd.coins(100)
+)
+```
+
+<ParamField path="current_median_history_base" type="HbdNaiAssetConvertible" required>
+  Current median price base (HBD) from feed history.
+</ParamField>
+
+<ParamField path="current_median_history_quote" type="HiveNaiAssetConvertible" required>
+  Current median price quote (HIVE) from feed history.
+</ParamField>
+
+<ParamField path="current_min_history_base" type="HbdNaiAssetConvertible" required>
+  Current minimum price base (HBD) from feed history.
+</ParamField>
+
+<ParamField path="current_min_history_quote" type="HiveNaiAssetConvertible" required>
+  Current minimum price quote (HIVE) from feed history.
+</ParamField>
+
+<ParamField path="hbd_amount_to_get" type="HbdNaiAssetConvertible" required>
+  Target HBD amount.
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Estimated HIVE collateral required.
+</ResponseField>
+
+---
+
+### estimate_hbd_interest
+
+Estimates HBD interest for savings.
+
+```python
+from datetime import datetime
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+interest = wax.estimate_hbd_interest(
+    account_hbd_seconds=1000000,
+    hbd_balance=wax.hbd.coins(100),
+    last_compounding_date=datetime(2024, 1, 1),
+    now=datetime.now(),
+    interest_rate=1000  # 10% in basis points
+)
+```
+
+<ParamField path="account_hbd_seconds" type="int" required>
+  Accumulated HBD seconds from account data.
+</ParamField>
+
+<ParamField path="hbd_balance" type="HbdNaiAssetConvertible" required>
+  Current HBD savings balance.
+</ParamField>
+
+<ParamField path="last_compounding_date" type="datetime" required>
+  Last interest capitalization date.
+</ParamField>
+
+<ParamField path="now" type="datetime" required>
+  Current date/time.
+</ParamField>
+
+<ParamField path="interest_rate" type="int" required>
+  Interest rate in basis points (0-10000).
+</ParamField>
+
+<ResponseField name="return" type="NaiAsset">
+  Estimated HBD interest.
+</ResponseField>

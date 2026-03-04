@@ -1,0 +1,242 @@
+---
+title: Account by key API
+description: Look up accounts associated with public keys
+---
+
+The Account by Key API allows you to find which accounts are associated with specific public keys. This is useful for discovering account ownership and authority relationships.
+
+## get_key_references
+
+Find all accounts that have a specific public key in their owner, active, or posting authorities.
+
+<CodeGroup>
+```typescript TypeScript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: [
+    "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9",
+    "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh"
+  ]
+});
+
+// Result is an array of arrays - one array per key
+result.accounts.forEach((accountList, index) => {
+  console.log(`Key ${index}: ${accountList.join(", ")}`);
+});
+```
+
+```python Python
+from wax import create_hive_chain
+
+chain = create_hive_chain()
+
+result = await chain.api.account_by_key_api.get_key_references(
+    keys=[
+        "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9",
+        "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh"
+    ]
+)
+
+# Result is an array of arrays - one array per key
+for index, account_list in enumerate(result.accounts):
+    print(f"Key {index}: {', '.join(account_list)}")
+```
+</CodeGroup>
+
+### Parameters
+
+<ParamField path="keys" type="TPublicKey[]" required>
+  Array of public keys to look up. Keys should be in the standard Hive format (e.g., STM... or TST... for testnet).
+</ParamField>
+
+### Response
+
+<ResponseField name="accounts" type="string[][]">
+  A two-dimensional array where each element corresponds to one input key. Each sub-array contains the account names that have that key in their authorities.
+
+  The order of the outer array matches the order of keys in the request. If a key is not associated with any accounts, its corresponding array will be empty.
+</ResponseField>
+
+<RequestExample>
+```json Example Response
+{
+  "accounts": [
+    ["hiveio"],
+    ["alice", "bob"]
+  ]
+}
+```
+</RequestExample>
+
+## Common use cases
+
+### Check key ownership
+
+Verify which accounts control a specific public key:
+
+<CodeGroup>
+```typescript TypeScript
+const publicKey = "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9";
+
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: [publicKey]
+});
+
+if (result.accounts[0].length > 0) {
+  console.log(`Key is used by: ${result.accounts[0].join(", ")}`);
+} else {
+  console.log("Key is not associated with any accounts");
+}
+```
+
+```python Python
+public_key = "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9"
+
+result = await chain.api.account_by_key_api.get_key_references(
+    keys=[public_key]
+)
+
+if len(result.accounts[0]) > 0:
+    print(f"Key is used by: {', '.join(result.accounts[0])}")
+else:
+    print("Key is not associated with any accounts")
+```
+</CodeGroup>
+
+### Bulk key lookup
+
+Look up multiple keys efficiently in a single request:
+
+<CodeGroup>
+```typescript TypeScript
+const keys = [
+  "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9",
+  "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh",
+  "STM7Qf3hVNx3xNHjVpXvRuN5KBCkcWCmqw5LbHJBkYGi5Zf8xXabc"
+];
+
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys
+});
+
+// Create a map of key to accounts
+const keyMap = new Map();
+keys.forEach((key, index) => {
+  keyMap.set(key, result.accounts[index]);
+});
+
+keyMap.forEach((accounts, key) => {
+  console.log(`${key}: ${accounts.length} accounts`);
+});
+```
+
+```python Python
+keys = [
+    "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9",
+    "STM5RqVBAVNp5ufMCetQtvLGLJo7unX9nyCBMMrTXRWQ9i1Zzzizh",
+    "STM7Qf3hVNx3xNHjVpXvRuN5KBCkcWCmqw5LbHJBkYGi5Zf8xXabc"
+]
+
+result = await chain.api.account_by_key_api.get_key_references(keys=keys)
+
+# Create a map of key to accounts
+key_map = {key: result.accounts[index] for index, key in enumerate(keys)}
+
+for key, accounts in key_map.items():
+    print(f"{key}: {len(accounts)} accounts")
+```
+</CodeGroup>
+
+### Recover account from key
+
+Find accounts you control when you only have the private key:
+
+<CodeGroup>
+```typescript TypeScript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+
+// Derive public key from private key
+const privateKey = "5JkFnXrLM2ap9t3AmAxBJvQHF7xSKtnTrCTginQCkhzU5S7ecPT";
+const publicKey = wax.getPublicKey(privateKey);
+
+// Find accounts
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: [publicKey]
+});
+
+console.log(`You control these accounts: ${result.accounts[0].join(", ")}`);
+```
+
+```python Python
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+# Derive public key from private key
+private_key = "5JkFnXrLM2ap9t3AmAxBJvQHF7xSKtnTrCTginQCkhzU5S7ecPT"
+public_key = wax.get_public_key(private_key)
+
+# Find accounts
+result = await chain.api.account_by_key_api.get_key_references(
+    keys=[public_key]
+)
+
+print(f"You control these accounts: {', '.join(result.accounts[0])}")
+```
+</CodeGroup>
+
+### Verify authority
+
+Check if a key has authority for a specific account:
+
+<CodeGroup>
+```typescript TypeScript
+const accountName = "alice";
+const keyToCheck = "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9";
+
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: [keyToCheck]
+});
+
+const hasAuthority = result.accounts[0].includes(accountName);
+
+if (hasAuthority) {
+  console.log(`Key has authority for ${accountName}`);
+} else {
+  console.log(`Key does NOT have authority for ${accountName}`);
+}
+```
+
+```python Python
+account_name = "alice"
+key_to_check = "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9"
+
+result = await chain.api.account_by_key_api.get_key_references(
+    keys=[key_to_check]
+)
+
+has_authority = account_name in result.accounts[0]
+
+if has_authority:
+    print(f"Key has authority for {account_name}")
+else:
+    print(f"Key does NOT have authority for {account_name}")
+```
+</CodeGroup>
+
+## Understanding authorities
+
+Hive accounts have three types of authorities, each with different permissions:
+
+- **Owner**: Full control over the account, including authority changes
+- **Active**: Can perform most operations like transfers and power ups
+- **Posting**: Can post content, vote, and perform social operations
+
+The `get_key_references` endpoint searches all three authority types. A key may be in one, multiple, or all authorities for an account.
+
+To get detailed authority information for specific accounts, use the [Database API's find_accounts](/api/hive/database-api#find_accounts) endpoint.

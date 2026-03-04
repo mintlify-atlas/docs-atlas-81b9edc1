@@ -1,0 +1,731 @@
+---
+title: Framework integration
+description: Integrate the WAX SDK with Next.js, React, Vue, Nuxt, and other frameworks
+---
+
+The WAX SDK works seamlessly with modern JavaScript frameworks. Learn how to integrate WAX into your React, Next.js, Vue, Nuxt, or Node.js application.
+
+## React integration
+
+Integrate WAX into React applications.
+
+### React with Vite
+
+Vite provides automatic WASM support:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [version, setVersion] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    createWaxFoundation()
+      .then((wax) => {
+        setVersion(wax.getVersion());
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("WASM loading error:", error);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <div>Loading WAX...</div>;
+
+  return (
+    <div>
+      <h1>WAX SDK Demo</h1>
+      <p>Version: {version}</p>
+    </div>
+  );
+}
+```
+
+### React Context
+
+Create a context for WAX instance:
+
+```typescript WaxContext.tsx
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createHiveChain, IHiveChainInterface } from "@hiveio/wax";
+
+interface WaxContextType {
+  chain: IHiveChainInterface | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+const WaxContext = createContext<WaxContextType>({
+  chain: null,
+  loading: true,
+  error: null
+});
+
+export function WaxProvider({ children }: { children: ReactNode }) {
+  const [chain, setChain] = useState<IHiveChainInterface | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    createHiveChain()
+      .then((instance) => {
+        setChain(instance);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <WaxContext.Provider value={{ chain, loading, error }}>
+      {children}
+    </WaxContext.Provider>
+  );
+}
+
+export function useWax() {
+  return useContext(WaxContext);
+}
+```
+
+Use the context in components:
+
+```typescript App.tsx
+import { WaxProvider, useWax } from "./WaxContext";
+
+function AccountInfo() {
+  const { chain, loading } = useWax();
+  const [account, setAccount] = useState(null);
+
+  useEffect(() => {
+    if (!chain) return;
+
+    chain.api.database_api
+      .find_accounts({ accounts: ["alice"] })
+      .then((result) => setAccount(result.accounts[0]));
+  }, [chain]);
+
+  if (loading) return <div>Loading...</div>;
+  if (!account) return <div>No account found</div>;
+
+  return (
+    <div>
+      <h2>{account.name}</h2>
+      <p>Balance: {account.balance}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <WaxProvider>
+      <AccountInfo />
+    </WaxProvider>
+  );
+}
+```
+
+### Custom hook
+
+Create a reusable hook for WAX operations:
+
+```typescript useHiveAccount.ts
+import { useState, useEffect } from "react";
+import { useWax } from "./WaxContext";
+import type { ApiAccount } from "@hiveio/wax";
+
+export function useHiveAccount(username: string) {
+  const { chain } = useWax();
+  const [account, setAccount] = useState<ApiAccount | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!chain) return;
+
+    setLoading(true);
+    chain.api.database_api
+      .find_accounts({ accounts: [username] })
+      .then((result) => {
+        setAccount(result.accounts[0] || null);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, [chain, username]);
+
+  return { account, loading, error };
+}
+```
+
+Use the hook:
+
+```typescript
+import { useHiveAccount } from "./useHiveAccount";
+
+function UserProfile({ username }: { username: string }) {
+  const { account, loading, error } = useHiveAccount(username);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  if (!account) return <div>Account not found</div>;
+
+  return (
+    <div>
+      <h2>{account.name}</h2>
+      <p>Balance: {account.balance}</p>
+      <p>HBD: {account.hbd_balance}</p>
+      <p>VESTS: {account.vesting_shares}</p>
+    </div>
+  );
+}
+```
+
+## Next.js integration
+
+Integrate WAX with Next.js applications.
+
+### Configuration
+
+Add to `next.config.js`:
+
+```javascript next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true
+    };
+    return config;
+  }
+};
+
+module.exports = nextConfig;
+```
+
+### Client component
+
+Use WAX in a client component:
+
+```typescript app/components/WaxDemo.tsx
+"use client";
+
+import { createWaxFoundation } from "@hiveio/wax";
+import { useEffect, useState } from "react";
+
+export default function WaxDemo() {
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    createWaxFoundation().then((wax) => {
+      setVersion(wax.getVersion());
+    });
+  }, []);
+
+  return <div>WAX version: {version}</div>;
+}
+```
+
+### Server actions
+
+Use WAX in server actions:
+
+```typescript app/actions.ts
+"use server";
+
+import { createHiveChain } from "@hiveio/wax";
+
+export async function getAccount(username: string) {
+  const chain = await createHiveChain();
+  
+  const result = await chain.api.database_api.find_accounts({
+    accounts: [username]
+  });
+
+  return result.accounts[0] || null;
+}
+
+export async function getGlobalProps() {
+  const chain = await createHiveChain();
+  
+  const props = await chain.api.database_api.get_dynamic_global_properties({});
+  
+  return {
+    headBlock: props.head_block_number,
+    time: props.time,
+    totalAccounts: props.total_accounts
+  };
+}
+```
+
+Use server actions in components:
+
+```typescript app/components/AccountDisplay.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { getAccount } from "../actions";
+
+export default function AccountDisplay({ username }: { username: string }) {
+  const [account, setAccount] = useState(null);
+
+  useEffect(() => {
+    getAccount(username).then(setAccount);
+  }, [username]);
+
+  if (!account) return <div>Loading...</div>;
+
+  return (
+    <div>
+      <h2>{account.name}</h2>
+      <p>Balance: {account.balance}</p>
+    </div>
+  );
+}
+```
+
+### API routes
+
+Create API routes with WAX:
+
+```typescript app/api/account/[username]/route.ts
+import { createHiveChain } from "@hiveio/wax";
+import { NextResponse } from "next/server";
+
+export async function GET(
+  request: Request,
+  { params }: { params: { username: string } }
+) {
+  try {
+    const chain = await createHiveChain();
+    
+    const result = await chain.api.database_api.find_accounts({
+      accounts: [params.username]
+    });
+
+    if (result.accounts.length === 0) {
+      return NextResponse.json(
+        { error: "Account not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(result.accounts[0]);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Vue integration
+
+Integrate WAX with Vue applications.
+
+### Vue with Vite
+
+Basic Vue 3 component:
+
+```vue App.vue
+<template>
+  <div>
+    <h1>WAX SDK Demo</h1>
+    <p v-if="loading">Loading...</p>
+    <p v-else>Version: {{ version }}</p>
+  </div>
+</template>
+
+<script setup>
+import { createWaxFoundation } from "@hiveio/wax";
+import { ref, onBeforeMount } from "vue";
+
+const version = ref("");
+const loading = ref(true);
+
+onBeforeMount(async () => {
+  try {
+    const wax = await createWaxFoundation();
+    version.value = wax.getVersion();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
+});
+</script>
+```
+
+### Composable
+
+Create a composable for WAX:
+
+```typescript composables/useWax.ts
+import { ref, readonly } from "vue";
+import { createHiveChain, type IHiveChainInterface } from "@hiveio/wax";
+
+const chain = ref<IHiveChainInterface | null>(null);
+const loading = ref(true);
+const error = ref<Error | null>(null);
+
+let initPromise: Promise<void> | null = null;
+
+export function useWax() {
+  if (!initPromise) {
+    initPromise = createHiveChain()
+      .then((instance) => {
+        chain.value = instance;
+        loading.value = false;
+      })
+      .catch((err) => {
+        error.value = err;
+        loading.value = false;
+      });
+  }
+
+  return {
+    chain: readonly(chain),
+    loading: readonly(loading),
+    error: readonly(error)
+  };
+}
+```
+
+Use the composable:
+
+```vue AccountInfo.vue
+<template>
+  <div>
+    <p v-if="loading">Loading...</p>
+    <p v-else-if="error">Error: {{ error.message }}</p>
+    <div v-else-if="account">
+      <h2>{{ account.name }}</h2>
+      <p>Balance: {{ account.balance }}</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, watch } from "vue";
+import { useWax } from "./composables/useWax";
+
+const props = defineProps<{ username: string }>();
+const { chain, loading, error } = useWax();
+const account = ref(null);
+
+watch(
+  [chain, () => props.username],
+  async ([chainInstance, username]) => {
+    if (!chainInstance) return;
+
+    const result = await chainInstance.api.database_api.find_accounts({
+      accounts: [username]
+    });
+
+    account.value = result.accounts[0] || null;
+  },
+  { immediate: true }
+);
+</script>
+```
+
+## Nuxt integration
+
+Integrate WAX with Nuxt applications.
+
+### Basic setup
+
+Nuxt component with SSR support:
+
+```vue pages/index.vue
+<script setup>
+import { createWaxFoundation } from "@hiveio/wax";
+import { ref } from "vue";
+
+const version = ref("");
+
+if (process.server) {
+  // Server-side initialization
+  const wax = await createWaxFoundation();
+  version.value = wax.getVersion();
+} else {
+  // Client-side initialization
+  onBeforeMount(async () => {
+    const wax = await createWaxFoundation();
+    version.value = wax.getVersion();
+  });
+}
+</script>
+
+<template>
+  <div>
+    <h1>WAX Version: {{ version }}</h1>
+  </div>
+</template>
+```
+
+### Server API
+
+Create server API endpoints:
+
+```typescript server/api/account/[username].ts
+import { createHiveChain } from "@hiveio/wax";
+
+export default defineEventHandler(async (event) => {
+  const username = getRouterParam(event, "username");
+
+  if (!username) {
+    throw createError({
+      statusCode: 400,
+      message: "Username is required"
+    });
+  }
+
+  const chain = await createHiveChain();
+  
+  const result = await chain.api.database_api.find_accounts({
+    accounts: [username]
+  });
+
+  if (result.accounts.length === 0) {
+    throw createError({
+      statusCode: 404,
+      message: "Account not found"
+    });
+  }
+
+  return result.accounts[0];
+});
+```
+
+Use the API in components:
+
+```vue pages/account/[username].vue
+<script setup>
+const route = useRoute();
+const username = route.params.username as string;
+
+const { data: account, pending, error } = await useFetch(
+  `/api/account/${username}`
+);
+</script>
+
+<template>
+  <div>
+    <p v-if="pending">Loading...</p>
+    <p v-else-if="error">Error: {{ error.message }}</p>
+    <div v-else-if="account">
+      <h1>{{ account.name }}</h1>
+      <p>Balance: {{ account.balance }}</p>
+      <p>HBD: {{ account.hbd_balance }}</p>
+    </div>
+  </div>
+</template>
+```
+
+## Node.js integration
+
+Use WAX in Node.js applications.
+
+### Basic setup
+
+Ensure your `package.json` has:
+
+```json package.json
+{
+  "type": "module"
+}
+```
+
+Basic Node.js script:
+
+```typescript index.ts
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+
+const props = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log(`Head block: ${props.head_block_number}`);
+console.log(`Time: ${props.time}`);
+
+const accounts = await chain.api.database_api.find_accounts({
+  accounts: ["alice"]
+});
+
+console.log(`Account: ${accounts.accounts[0].name}`);
+console.log(`Balance: ${accounts.accounts[0].balance}`);
+```
+
+### Express.js API
+
+Create an API with Express:
+
+```typescript server.ts
+import express from "express";
+import { createHiveChain } from "@hiveio/wax";
+
+const app = express();
+const chain = await createHiveChain();
+
+app.get("/api/account/:username", async (req, res) => {
+  try {
+    const result = await chain.api.database_api.find_accounts({
+      accounts: [req.params.username]
+    });
+
+    if (result.accounts.length === 0) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+
+    res.json(result.accounts[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/props", async (req, res) => {
+  try {
+    const props = await chain.api.database_api.get_dynamic_global_properties({});
+    res.json(props);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(3000, () => {
+  console.log("Server running on http://localhost:3000");
+});
+```
+
+### CLI application
+
+Create a command-line tool:
+
+```typescript cli.ts
+import { createHiveChain } from "@hiveio/wax";
+import { Command } from "commander";
+
+const program = new Command();
+
+program
+  .name("hive-cli")
+  .description("Hive blockchain CLI tool")
+  .version("1.0.0");
+
+program
+  .command("account <username>")
+  .description("Get account information")
+  .action(async (username) => {
+    const chain = await createHiveChain();
+    
+    const result = await chain.api.database_api.find_accounts({
+      accounts: [username]
+    });
+
+    if (result.accounts.length === 0) {
+      console.error("Account not found");
+      process.exit(1);
+    }
+
+    const account = result.accounts[0];
+    console.log(`Account: ${account.name}`);
+    console.log(`Balance: ${account.balance}`);
+    console.log(`HBD: ${account.hbd_balance}`);
+  });
+
+program
+  .command("block <number>")
+  .description("Get block information")
+  .action(async (number) => {
+    const chain = await createHiveChain();
+    
+    const result = await chain.api.block_api.get_block({
+      block_num: parseInt(number)
+    });
+
+    console.log(`Block: ${result.block.block_id}`);
+    console.log(`Witness: ${result.block.witness}`);
+    console.log(`Transactions: ${result.block.transactions.length}`);
+  });
+
+program.parse();
+```
+
+Run the CLI:
+
+```bash
+tsx cli.ts account alice
+tsx cli.ts block 87654321
+```
+
+## Best practices
+
+### Initialize once
+
+Create WAX instances once and reuse them:
+
+```typescript
+// Good
+const chain = await createHiveChain();
+// Reuse chain for all operations
+
+// Bad
+for (const account of accounts) {
+  const chain = await createHiveChain(); // Don't create multiple instances
+  // ...
+}
+```
+
+### Error handling
+
+Always handle errors:
+
+```typescript
+try {
+  const chain = await createHiveChain();
+  const result = await chain.api.database_api.find_accounts({ /* ... */ });
+} catch (error) {
+  console.error("Error:", error.message);
+  // Handle error appropriately
+}
+```
+
+### Loading states
+
+Show loading indicators during WASM initialization:
+
+```typescript
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  createWaxFoundation()
+    .then((wax) => {
+      // Use wax
+      setLoading(false);
+    })
+    .catch((error) => {
+      console.error(error);
+      setLoading(false);
+    });
+}, []);
+
+if (loading) return <div>Loading WAX...</div>;
+```
+
+## Next steps
+
+Explore complete examples:
+
+- Study [working examples](/typescript/examples)
+- Learn about [transaction building](/typescript/transactions)
+- Read about [API calls](/typescript/api-calls)

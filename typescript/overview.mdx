@@ -1,0 +1,137 @@
+---
+title: Overview
+description: Learn about the WAX TypeScript SDK and how to build Hive blockchain applications
+---
+
+The WAX TypeScript SDK provides a complete toolkit for building Hive blockchain applications in JavaScript and TypeScript environments. It runs in browsers, Node.js, and modern frameworks through WebAssembly (WASM).
+
+## Key features
+
+The SDK offers two main entry points based on your use case:
+
+- **Offline operations** - Use `createWaxFoundation()` for transaction building, signing, and cryptographic operations without network access
+- **Online operations** - Use `createHiveChain()` for full blockchain interaction including API calls, transaction broadcasting, and account queries
+
+## Architecture
+
+WAX uses WebAssembly to compile the core Hive protocol code (written in C++) directly into your JavaScript application. This provides:
+
+- **Performance** - Near-native speed for cryptographic operations and transaction serialization
+- **Accuracy** - Identical behavior to the Hive blockchain nodes
+- **Type safety** - Full TypeScript definitions for all operations and API calls
+- **Small bundle size** - Optimized WASM modules with tree-shaking support
+
+## Core concepts
+
+### Transactions
+
+You build transactions by pushing operations into a transaction object:
+
+```typescript
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "my-post",
+    weight: 10000
+  }
+});
+```
+
+### Operations
+
+Operations are the building blocks of transactions. The SDK provides:
+
+- **Simple operations** - Direct protocol operations as inline objects
+- **Complex operations** - High-level factories for multi-operation scenarios (blog posts, recurrent transfers, etc.)
+- **Hive Apps operations** - Specialized operations for communities, follows, and resource credits
+
+### Assets
+
+Assets use NAI (Numerical Asset Identifier) format:
+
+```typescript
+chain.hiveCoins(100)      // 100.000 HIVE
+chain.hbdCoins(50.5)      // 50.500 HBD
+chain.vestsCoins(1000.5)  // 1000.500000 VESTS
+```
+
+### Formatters
+
+Use template literals with `waxify` for readable output:
+
+```typescript
+const account = await chain.api.database_api.find_accounts({ accounts: ["gtg"] });
+
+console.log(chain.waxify`Account: ${account.accounts[0].name} has ${account.accounts[0].balance} balance`);
+// Output: Account: gtg has 1,234.567 HIVE balance
+```
+
+## Package structure
+
+The main package `@hiveio/wax` includes:
+
+- Core WASM module
+- TypeScript interfaces and types
+- API caller implementations
+- Transaction builders
+- Cryptographic utilities
+
+Extension packages provide signing capabilities:
+
+- `@hiveio/wax-signers-beekeeper` - Beekeeper wallet integration
+- `@hiveio/wax-signers-keychain` - Hive Keychain browser extension
+- `@hiveio/wax-signers-metamask` - MetaMask Snaps integration
+- `@hiveio/wax-signers-peakvault` - PeakVault mobile wallet
+- `@hiveio/wax-signers-hb-auth` - HiveAuth protocol support
+
+## Use cases
+
+### Offline applications
+
+Build transactions without network access:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+const tx = wax.createTransactionWithTaPoS(headBlockId);
+tx.pushOperation({ /* ... */ });
+```
+
+### Online applications
+
+Interact with the Hive network:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const account = await chain.api.database_api.find_accounts({ accounts: ["alice"] });
+const tx = await chain.createTransaction();
+```
+
+### Framework integration
+
+WAX works seamlessly with:
+
+- React (Create React App, Vite)
+- Next.js (App Router, Pages Router)
+- Vue (Vite, Webpack)
+- Nuxt
+- Node.js applications
+- Plain HTML/JavaScript
+
+## Next steps
+
+Explore the SDK capabilities:
+
+- [Install the SDK](/typescript/installation) in your project
+- Learn about [offline operations](/typescript/wax-foundation)
+- Discover [online operations](/typescript/hive-chain)
+- Build and sign [transactions](/typescript/transactions)
+- Make [API calls](/typescript/api-calls) to the network
+- Integrate with [frameworks](/typescript/framework-integration)
+- Study [working examples](/typescript/examples)

@@ -1,0 +1,570 @@
+---
+title: Models and types
+description: Data models, type definitions, and structures used in the Wax Python SDK
+---
+
+The Wax SDK uses various data models and type definitions to represent blockchain entities and structures.
+
+## Basic types
+
+Fundamental type aliases for blockchain identifiers and data.
+
+```python
+from wax.models.basic import (
+    AccountName,
+    Hex,
+    ChainId,
+    TransactionId,
+    SigDigest,
+    Signature,
+    HeadBlockId,
+    PublicKey
+)
+
+account: AccountName = "alice"
+chain_id: ChainId = "beeab0de00000000000000000000000000000000000000000000000000000000"
+tx_id: TransactionId = "f3a1b2c3..."
+public_key: PublicKey = "STM7..."
+```
+
+<ResponseField name="AccountName" type="str">
+  Account name on the Hive blockchain (3-16 characters, lowercase, digits, hyphens).
+</ResponseField>
+
+<ResponseField name="Hex" type="str">
+  Hexadecimal string.
+</ResponseField>
+
+<ResponseField name="ChainId" type="Hex">
+  Chain identifier in hexadecimal format.
+</ResponseField>
+
+<ResponseField name="TransactionId" type="Hex">
+  Transaction identifier in hexadecimal format.
+</ResponseField>
+
+<ResponseField name="SigDigest" type="Hex">
+  Signature digest in hexadecimal format.
+</ResponseField>
+
+<ResponseField name="Signature" type="Hex">
+  Transaction signature in hexadecimal format.
+</ResponseField>
+
+<ResponseField name="HeadBlockId" type="Hex">
+  Head block identifier in hexadecimal format.
+</ResponseField>
+
+<ResponseField name="PublicKey" type="str">
+  Public key in WIF format (e.g., "STM7...").
+</ResponseField>
+
+---
+
+## Asset types
+
+Types and models for working with Hive blockchain assets (HIVE, HBD, VESTS).
+
+### Asset type aliases
+
+```python
+from wax.models.asset import (
+    AssetAmount,
+    NaiAsset,
+    HiveNaiAssetConvertible,
+    HbdNaiAssetConvertible,
+    VestsNaiAssetConvertible,
+    AnyNaiAssetConvertible
+)
+
+# Create assets
+wax = create_wax_foundation()
+hive_asset: NaiAsset = wax.hive.coins(10.5)
+hbd_asset: NaiAsset = wax.hbd.satoshis(5000)
+```
+
+<ResponseField name="AssetAmount" type="int | float | Decimal">
+  Numeric type that can represent an asset amount.
+</ResponseField>
+
+<ResponseField name="NaiAsset" type="proto_asset">
+  Asset in NAI (Number Asset Identifier) format - the HF26 standard format.
+</ResponseField>
+
+<ResponseField name="HiveNaiAssetConvertible" type="NaiAsset | dict | str">
+  Types that can be converted to HIVE NAI format.
+</ResponseField>
+
+<ResponseField name="HbdNaiAssetConvertible" type="NaiAsset | dict | str">
+  Types that can be converted to HBD NAI format.
+</ResponseField>
+
+<ResponseField name="VestsNaiAssetConvertible" type="NaiAsset | dict | str">
+  Types that can be converted to VESTS NAI format.
+</ResponseField>
+
+<ResponseField name="AnyNaiAssetConvertible" type="HiveNaiAssetConvertible | HbdNaiAssetConvertible | VestsNaiAssetConvertible">
+  Any type convertible to NAI asset format.
+</ResponseField>
+
+---
+
+### AssetName enum
+
+Enumeration of asset names.
+
+```python
+from wax.models.asset import AssetName
+
+print(AssetName.Hive.value)   # "HIVE"
+print(AssetName.Hbd.value)    # "HBD"
+print(AssetName.Vests.value)  # "VESTS"
+```
+
+<ResponseField name="AssetName.Hive" type="Enum">
+  HIVE token.
+</ResponseField>
+
+<ResponseField name="AssetName.Hbd" type="Enum">
+  Hive Backed Dollar token.
+</ResponseField>
+
+<ResponseField name="AssetName.Vests" type="Enum">
+  VESTS (Hive Power) token.
+</ResponseField>
+
+---
+
+### AssetInfo dataclass
+
+Asset metadata information.
+
+```python
+from wax.models.asset import AssetInfo
+
+hive_info = AssetInfo(nai="@@000000021", precision=3)
+hbd_info = AssetInfo(nai="@@000000013", precision=3)
+vests_info = AssetInfo(nai="@@000000037", precision=6)
+```
+
+<ResponseField name="AssetInfo" type="dataclass">
+  Contains asset metadata:
+  - `nai`: Number Asset Identifier string
+  - `precision`: Decimal precision (3 for HIVE/HBD, 6 for VESTS)
+</ResponseField>
+
+---
+
+### AssetFactory protocol
+
+Factory interface for creating assets.
+
+```python
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+# Each asset factory implements this protocol
+hive_factory = wax.hive
+hbd_factory = wax.hbd
+vests_factory = wax.vests
+
+# Create from coins (with precision)
+asset1 = hive_factory.coins(10.5)  # 10.500 HIVE
+
+# Create from satoshis (no precision)
+asset2 = hive_factory.satoshis(10500)  # 10.500 HIVE
+```
+
+<ResponseField name="AssetFactory" type="Protocol">
+  Protocol with methods:
+  - `coins(amount: AssetAmount) -> NaiAsset` - Create from decimal amount
+  - `satoshis(amount: int) -> NaiAsset` - Create from integer satoshis
+</ResponseField>
+
+---
+
+## Authority types
+
+Types for account authorities and permissions.
+
+### Authority type aliases
+
+```python
+from wax.models.authority import (
+    WaxAuthority,
+    KeyAuths,
+    AccountAuths
+)
+
+# Key authorities (public key -> weight)
+key_auths: KeyAuths = {
+    "STM7...": 1,
+    "STM8...": 1
+}
+
+# Account authorities (account name -> weight)
+account_auths: AccountAuths = {
+    "alice": 1,
+    "bob": 1
+}
+```
+
+<ResponseField name="WaxAuthority" type="proto_authority">
+  Authority structure containing weight threshold and authorized keys/accounts.
+</ResponseField>
+
+<ResponseField name="KeyAuths" type="dict[PublicKey, int]">
+  Dictionary mapping public keys to their weight in an authority.
+</ResponseField>
+
+<ResponseField name="AccountAuths" type="dict[AccountName, int]">
+  Dictionary mapping account names to their weight in an authority.
+</ResponseField>
+
+---
+
+### WaxAuthorities dataclass
+
+Container for all account authorities.
+
+```python
+from wax.models.authority import WaxAuthorities
+from wax.proto.authority import authority
+
+authorities = WaxAuthorities(
+    owner=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM7owner...": 1}
+    ),
+    active=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM7active...": 1}
+    ),
+    posting=authority(
+        weight_threshold=1,
+        account_auths={"hive.blog": 1},
+        key_auths={"STM7posting...": 1}
+    )
+)
+
+print(authorities.owner.weight_threshold)
+print(authorities.posting.account_auths)
+```
+
+<ResponseField name="WaxAuthorities" type="dataclass">
+  Contains account authorities:
+  - `owner`: Owner authority (highest level)
+  - `active`: Active authority (financial operations)
+  - `posting`: Posting authority (content operations)
+</ResponseField>
+
+---
+
+### WaxAccountAuthorityInfo dataclass
+
+Complete authority information for an account.
+
+```python
+import asyncio
+from wax import create_hive_chain
+
+async def main():
+    chain = create_hive_chain()
+    
+    auth_info = await chain.collect_account_authorities("alice")
+    
+    print(f"Account: {auth_info.account}")
+    print(f"Memo key: {auth_info.memo_key}")
+    print(f"Owner keys: {list(auth_info.authorities.owner.key_auths.keys())}")
+    print(f"Last owner update: {auth_info.last_owner_update}")
+    
+    chain.teardown()
+
+asyncio.run(main())
+```
+
+<ResponseField name="WaxAccountAuthorityInfo" type="dataclass">
+  Contains:
+  - `account`: Account name
+  - `authorities`: WaxAuthorities object with owner/active/posting
+  - `memo_key`: Public memo key
+  - `last_owner_update`: Last owner authority update time
+  - `previous_owner_update`: Previous owner authority update time
+</ResponseField>
+
+---
+
+### ITransactionRequiredAuthorities interface
+
+Interface for accessing required authorities from transactions.
+
+```python
+from wax import create_wax_foundation
+from wax.proto.operations import transfer, vote
+
+wax = create_wax_foundation()
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+
+tx.push_operation(
+    transfer(from_account="alice", to_account="bob", amount=wax.hive.satoshis(1000), memo="")
+)
+tx.push_operation(
+    vote(voter="alice", author="bob", permlink="post", weight=10000)
+)
+
+auths = tx.required_authorities
+
+print("Posting accounts:", auths.posting_accounts)  # {"alice"}
+print("Active accounts:", auths.active_accounts)    # {"alice"}
+print("Owner accounts:", auths.owner_accounts)      # set()
+print("Other authorities:", auths.other_authorities) # []
+```
+
+<ResponseField name="ITransactionRequiredAuthorities" type="interface">
+  Properties:
+  - `posting_accounts`: Set of accounts requiring posting authority
+  - `active_accounts`: Set of accounts requiring active authority
+  - `owner_accounts`: Set of accounts requiring owner authority
+  - `other_authorities`: List of custom authority structures
+</ResponseField>
+
+---
+
+## Key data interfaces
+
+Interfaces for private key and brain key data.
+
+### IPrivateKeyData interface
+
+```python
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+key_data = wax.get_private_key_from_password(
+    account="alice",
+    role="posting",
+    password="master-password"
+)
+
+print(key_data.wif_private_key)        # "5J..."
+print(key_data.associated_public_key)  # "STM7..."
+```
+
+<ResponseField name="IPrivateKeyData" type="interface">
+  Properties:
+  - `wif_private_key`: Private key in WIF format
+  - `associated_public_key`: Associated public key in WIF format
+</ResponseField>
+
+---
+
+### IBrainKeyData interface
+
+```python
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+brain_key_data = wax.suggest_brain_key()
+
+print(brain_key_data.brain_key)                # "WORD WORD WORD..."
+print(brain_key_data.wif_private_key)          # "5J..."
+print(brain_key_data.associated_public_key)    # "STM7..."
+```
+
+<ResponseField name="IBrainKeyData" type="interface">
+  Extends `IPrivateKeyData` with:
+  - `brain_key`: Space-separated brain key words
+  - `wif_private_key`: Derived private key
+  - `associated_public_key`: Associated public key
+</ResponseField>
+
+---
+
+## Manabar data
+
+### IManabarData interface
+
+Interface for manabar calculation results.
+
+```python
+from datetime import datetime
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+
+manabar = wax.calculate_current_manabar_value(
+    head_block_time=datetime.now(),
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1234567890
+)
+
+print(f"Max mana: {manabar.max_mana}")
+print(f"Current mana: {manabar.current_mana}")
+print(f"Percent: {manabar.percent}%")
+```
+
+<ResponseField name="IManabarData" type="interface">
+  Properties:
+  - `max_mana`: Maximum mana capacity
+  - `current_mana`: Current regenerated mana value
+  - `percent`: Manabar percentage (0-100)
+</ResponseField>
+
+---
+
+## Transaction types
+
+Type aliases for different transaction formats.
+
+```python
+from wax.transaction_type_aliases import ProtoTransaction, JsonTransaction
+
+# Proto transaction (protobuf format)
+proto_tx: ProtoTransaction = tx.transaction
+
+# JSON transaction (API format)
+json_tx: JsonTransaction = tx.to_api_json()
+```
+
+<ResponseField name="ProtoTransaction" type="proto_transaction">
+  Transaction in protocol buffer format.
+</ResponseField>
+
+<ResponseField name="JsonTransaction" type="str">
+  Transaction in JSON string format for Hive API calls.
+</ResponseField>
+
+---
+
+## Operation types
+
+Type aliases for operation formats.
+
+```python
+from wax.models.operations import (
+    Operation,
+    WaxMetaOperation,
+    ProtoOperation,
+    ProtocolOperation
+)
+
+# Any operation format
+op: Operation = transfer(...)
+
+# Proto operation
+proto_op: ProtoOperation = transfer(...)
+```
+
+<ResponseField name="Operation" type="ProtoOperation | ProtocolOperation">
+  Union of proto and protocol operation formats.
+</ResponseField>
+
+<ResponseField name="WaxMetaOperation" type="Message | OperationBase">
+  Internal operation representation.
+</ResponseField>
+
+<ResponseField name="ProtoOperation" type="dict | str | Message">
+  Types convertible to proto operation.
+</ResponseField>
+
+<ResponseField name="ProtocolOperation" type="dict | str">
+  Operation in HF26 protocol format.
+</ResponseField>
+
+---
+
+## Configuration types
+
+### ChainConfig type
+
+```python
+from wax import create_wax_foundation
+
+wax = create_wax_foundation()
+config: dict[str, str] = wax.config
+
+print(config["HIVE_CHAIN_ID"])
+print(config["HIVE_ADDRESS_PREFIX"])
+print(config["HIVE_BLOCK_INTERVAL"])
+```
+
+<ResponseField name="ChainConfig" type="dict[str, str]">
+  Dictionary containing chain configuration parameters like block interval, address prefix, and protocol constants.
+</ResponseField>
+
+---
+
+### TTimestamp type
+
+```python
+from datetime import datetime, timedelta
+from wax.interfaces import TTimestamp
+
+# Absolute time
+expiration: TTimestamp = datetime(2024, 12, 31, 23, 59, 59)
+
+# Relative time
+expiration: TTimestamp = timedelta(minutes=5)
+```
+
+<ResponseField name="TTimestamp" type="datetime | timedelta">
+  Type alias for timestamps - can be absolute (datetime) or relative (timedelta).
+</ResponseField>
+
+---
+
+## Complete example
+
+```python
+import asyncio
+from datetime import datetime, timedelta
+from wax import create_hive_chain
+from wax.models.basic import AccountName, PublicKey
+from wax.models.asset import NaiAsset
+from wax.models.authority import WaxAccountAuthorityInfo
+from wax.proto.operations import transfer
+
+async def main():
+    chain = create_hive_chain()
+    
+    try:
+        # Use type annotations
+        sender: AccountName = "alice"
+        receiver: AccountName = "bob"
+        amount: NaiAsset = chain.hive.satoshis(1000)
+        
+        # Get authority info
+        auth_info: WaxAccountAuthorityInfo = await chain.collect_account_authorities(sender)
+        posting_keys: list[PublicKey] = list(auth_info.authorities.posting.key_auths.keys())
+        
+        print(f"Account: {auth_info.account}")
+        print(f"Posting keys: {posting_keys}")
+        print(f"Memo key: {auth_info.memo_key}")
+        
+        # Create transaction
+        tx = await chain.create_transaction(expiration=timedelta(minutes=2))
+        tx.push_operation(
+            transfer(
+                from_account=sender,
+                to_account=receiver,
+                amount=amount,
+                memo="Payment"
+            )
+        )
+        
+        # Get transaction info
+        print(f"Transaction ID: {tx.id}")
+        print(f"Impacted accounts: {tx.impacted_accounts}")
+        print(f"Required authorities: {tx.required_authorities.active_accounts}")
+        
+    finally:
+        chain.teardown()
+
+asyncio.run(main())
+```

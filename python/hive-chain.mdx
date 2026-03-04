@@ -1,0 +1,453 @@
+---
+title: Hive chain (online operations)
+description: Use create_hive_chain for full blockchain interaction with API calls and broadcasting
+---
+
+The `create_hive_chain()` factory function creates an online interface for Hive blockchain operations. This provides full blockchain access including API calls, transaction broadcasting, and automatic TAPOS data retrieval.
+
+## Factory function
+
+```python
+def create_hive_chain(options: WaxChainOptions | None = None) -> IHiveChainInterface:
+    """Factory function to provide hive chain interface functionality."""
+```
+
+### Parameters
+
+<ParamField path="options" type="WaxChainOptions | None">
+  Optional configuration. Defaults to mainnet via hive.blog if not provided.
+  
+  ```python
+  class WaxChainOptions(WaxOptions):
+      def __init__(
+          self,
+          chain_id: ChainId | str = DEFAULT_CHAIN_ID,
+          endpoint_url: HttpUrl | str = DEFAULT_ENDPOINT_URL,
+      ) -> None:
+          """Constructs WaxChainOptions.
+          
+          Args:
+              chain_id: chain id used for signing. Defaults to mainnet chain id.
+              endpoint_url: url of the node to connect to. Defaults to mainnet (hive.blog) node.
+          """
+  ```
+</ParamField>
+
+### Returns
+
+Returns an `IHiveChainInterface` instance with full online capabilities including all offline features from `IWaxBaseInterface`.
+
+## Basic usage
+
+```python
+from wax import create_hive_chain
+
+# Create with default mainnet configuration
+wax = create_hive_chain()
+
+# Access chain information (inherited from IWaxBaseInterface)
+print(f"Chain ID: {wax.chain_id}")
+print(f"Endpoint: {wax.endpoint_url}")
+```
+
+## Custom configuration
+
+```python
+from wax import create_hive_chain, WaxChainOptions
+
+# Use different API endpoint
+options = WaxChainOptions(
+    endpoint_url="https://api.deathwing.me"
+)
+wax = create_hive_chain(options)
+
+# Testnet configuration
+testnet_options = WaxChainOptions(
+    chain_id="18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e",
+    endpoint_url="https://testnet.openhive.network"
+)
+wax_testnet = create_hive_chain(testnet_options)
+
+# Change endpoint at runtime
+wax.endpoint_url = "https://api.hive.blog"
+```
+
+## API access
+
+The `api` property provides access to Hive blockchain APIs.
+
+### Database API
+
+Query blockchain data:
+
+```python
+# Get accounts
+accounts = await wax.api.database_api.find_accounts(
+    accounts=["alice", "bob", "charlie"]
+)
+
+for account in accounts.accounts:
+    print(f"Account: {account.name}")
+    print(f"Balance: {account.balance}")
+    print(f"Voting power: {account.voting_manabar.current_mana}")
+
+# Get dynamic global properties
+dgpo = await wax.api.database_api.get_dynamic_global_properties()
+print(f"Head block: {dgpo.head_block_number}")
+print(f"Time: {dgpo.time}")
+print(f"Total vesting fund: {dgpo.total_vesting_fund_hive}")
+
+# Get block
+block = await wax.api.database_api.get_block(
+    block_num=80000000
+)
+print(f"Transactions: {len(block.transactions)}")
+
+# List witnesses
+witnesses = await wax.api.database_api.list_witnesses(
+    start=None,
+    limit=100,
+    order="by_name"
+)
+
+# Get feed history
+feed = await wax.api.database_api.get_feed_history()
+print(f"Current median: {feed.current_median_history}")
+print(f"Price feed: {feed.price_history}")
+```
+
+### Resource Credits API
+
+Query RC (Resource Credit) information:
+
+```python
+# Get RC accounts
+rc_accounts = await wax.api.rc_api.find_rc_accounts(
+    accounts=["alice"]
+)
+
+for rc_account in rc_accounts.rc_accounts:
+    print(f"Account: {rc_account.account}")
+    print(f"Max RC: {rc_account.max_rc}")
+    print(f"Current RC: {rc_account.rc_manabar.current_mana}")
+    
+    # Calculate current RC with helper
+    current_rc = wax.calculate_current_manabar_value(
+        head_block_time=dgpo.time,
+        max_mana=rc_account.max_rc,
+        current_mana=rc_account.rc_manabar.current_mana,
+        last_update_time=rc_account.rc_manabar.last_update_time
+    )
+    print(f"RC percent: {current_rc.percent}%")
+```
+
+### Network Broadcast API
+
+Broadcast transactions directly:
+
+```python
+# This is typically done via wax.broadcast(), but you can also use the API directly
+await wax.api.network_broadcast_api.broadcast_transaction(
+    trx=tx.to_api_json()
+)
+```
+
+## Creating transactions
+
+Create transactions with automatic TAPOS data:
+
+```python
+from wax.proto.operations import transfer
+from datetime import timedelta
+
+# Create transaction (automatically fetches TAPOS data)
+tx = await wax.create_transaction(
+    expiration=timedelta(minutes=1)  # Optional, defaults to 1 minute
+)
+
+# Add operations
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+)
+
+print(f"Transaction ID: {tx.id}")
+print(f"Impacted accounts: {tx.impacted_accounts}")
+```
+
+## Signing and broadcasting
+
+Sign with Beekeeper and broadcast to the network:
+
+```python
+from beekeepy import AsyncBeekeeper
+
+async def sign_and_broadcast():
+    # Create transaction
+    tx = await wax.create_transaction()
+    tx.push_operation(
+        transfer(
+            from_account="alice",
+            to_account="bob",
+            amount=wax.hive.satoshis(1000),
+            memo="Hello"
+        )
+    )
+    
+    # Sign with Beekeeper
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(
+            name="my_wallet",
+            password="password"
+        )
+        
+        # Import key if not already in wallet
+        public_key = "STM..."
+        if public_key not in await wallet.public_keys:
+            await wallet.import_key(private_key="5K...")
+        
+        # Sign transaction
+        await tx.sign(wallet=wallet, public_key=public_key)
+    
+    # Broadcast to network
+    await wax.broadcast(tx)
+    print(f"Broadcasted: {tx.id}")
+```
+
+## On-chain verification
+
+Transactions created with `create_transaction()` return `IOnlineTransaction` which supports automatic verification:
+
+```python
+# Verify accounts exist and no private keys in memos
+try:
+    await tx.perform_on_chain_verification()
+    print("Verification passed")
+except Exception as e:
+    print(f"Verification failed: {e}")
+
+# Broadcast automatically performs verification
+try:
+    await wax.broadcast(tx)
+except Exception as e:
+    print(f"Broadcast failed: {e}")
+```
+
+<Note>
+The `broadcast()` method automatically calls `perform_on_chain_verification()` for `IOnlineTransaction` instances before broadcasting.
+</Note>
+
+## Collecting account authorities
+
+Retrieve account permission data:
+
+```python
+# Single account
+auth_info = await wax.collect_account_authorities("alice")
+print(f"Owner: {auth_info.owner}")
+print(f"Active: {auth_info.active}")
+print(f"Posting: {auth_info.posting}")
+print(f"Memo key: {auth_info.memo_key}")
+
+# Multiple accounts
+auth_infos = await wax.collect_account_authorities("alice", "bob", "charlie")
+for auth_info in auth_infos:
+    print(f"Account: {auth_info.account_name}")
+```
+
+## Extending the API
+
+Add custom API endpoints or override existing ones:
+
+```python
+from beekeepy.handle.remote import AbstractAsyncApi
+from wax.api.collection import DatabaseApi as BaseDatabaseApi
+from typing import Any
+
+# Override existing API to add methods
+class DatabaseApi(BaseDatabaseApi):
+    @BaseDatabaseApi.endpoint_jsonrpc
+    async def get_config(self) -> Any:
+        ...
+
+# Define new API
+class BlockApi(AbstractAsyncApi):
+    @AbstractAsyncApi.endpoint_jsonrpc
+    async def get_block_header(self, *, block_num: int) -> Any:
+        ...
+
+# Combine into collection
+class MyApiCollection:
+    def __init__(self) -> None:
+        self.block_api = BlockApi
+        self.database_api = DatabaseApi
+
+# Extend the chain interface
+wax = create_hive_chain()
+wax_extended = wax.extends(MyApiCollection)
+
+# Use extended API
+response = await wax_extended.api.block_api.get_block_header(block_num=123)
+config = await wax_extended.api.database_api.get_config()
+```
+
+You can also extend REST APIs using `extend_rest()`:
+
+```python
+class MyRestApiCollection:
+    def __init__(self) -> None:
+        self.custom_rest_api = CustomRestApi
+
+wax_extended = wax.extend_rest(MyRestApiCollection)
+```
+
+## Resource management
+
+Clean up resources when done:
+
+```python
+try:
+    # Use the chain interface
+    accounts = await wax.api.database_api.find_accounts(accounts=["alice"])
+finally:
+    # Clean up
+    wax.teardown()
+```
+
+Or use as an async context manager pattern:
+
+```python
+async def main():
+    wax = create_hive_chain()
+    try:
+        # Your code here
+        pass
+    finally:
+        wax.teardown()
+```
+
+## Offline features
+
+All offline capabilities from [`create_wax_foundation()`](/python/wax-foundation) are available:
+
+```python
+# Asset creation
+hive_amount = wax.hive.satoshis(1000)
+
+# Key generation
+brain_key = wax.suggest_brain_key()
+
+# Account validation
+is_valid = wax.is_valid_account_name("alice")
+
+# Manabar calculations
+manabar = wax.calculate_current_manabar_value(
+    head_block_time=dgpo.time,
+    max_mana=1000000,
+    current_mana=500000,
+    last_update_time=1705315800
+)
+
+# Economic calculations
+hp_apr = wax.calculate_hp_apr(
+    head_block_num=dgpo.head_block_number,
+    vesting_reward_percent=dgpo.vesting_reward_percent,
+    virtual_supply=dgpo.virtual_supply,
+    total_vesting_fund_hive=dgpo.total_vesting_fund_hive
+)
+```
+
+## Error handling
+
+```python
+from wax.exceptions import (
+    AccountNotFoundError,
+    TransactionNotSignedError,
+    WaxValidationFailedError,
+    PrivateKeyDetectedInMemoError,
+)
+
+try:
+    tx = await wax.create_transaction()
+    tx.push_operation(...)
+    await wax.broadcast(tx)
+except TransactionNotSignedError:
+    print("Transaction must be signed before broadcasting")
+except AccountNotFoundError as e:
+    print(f"Account not found: {e}")
+except PrivateKeyDetectedInMemoError:
+    print("Private key detected in memo - security issue!")
+except WaxValidationFailedError as e:
+    print(f"Validation failed: {e}")
+```
+
+## Complete example
+
+```python
+import asyncio
+from wax import create_hive_chain, WaxChainOptions
+from wax.proto.operations import transfer
+from beekeepy import AsyncBeekeeper
+
+async def main():
+    # Setup
+    wax = create_hive_chain(WaxChainOptions(
+        endpoint_url="https://api.hive.blog"
+    ))
+    
+    try:
+        # Query account
+        accounts = await wax.api.database_api.find_accounts(
+            accounts=["alice"]
+        )
+        print(f"Balance: {accounts.accounts[0].balance}")
+        
+        # Create and sign transaction
+        tx = await wax.create_transaction()
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=wax.hive.satoshis(1000),
+                memo="Payment"
+            )
+        )
+        
+        # Sign
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="my_wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        # Broadcast
+        await wax.broadcast(tx)
+        print(f"Success! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(main())
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Transaction management" icon="file-lines" href="/python/transactions">
+    Learn more about building and managing transactions
+  </Card>
+  <Card title="API calls" icon="server" href="/python/api-calls">
+    Explore available API endpoints
+  </Card>
+  <Card title="Examples" icon="code" href="/python/examples">
+    See complete working examples
+  </Card>
+</CardGroup>

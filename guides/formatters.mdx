@@ -1,0 +1,517 @@
+---
+title: "Formatters"
+description: "Using formatters for output formatting and display"
+---
+
+Formatters provide a powerful way to transform API responses and blockchain data into human-readable formats. WAX includes a flexible formatting system based on template literals.
+
+## Understanding formatters
+
+WAX formatters allow you to:
+
+- **Format numbers** with locale-specific separators and precision
+- **Transform asset amounts** from satoshis to decimal values
+- **Customize output** based on data properties
+- **Create reusable** formatting rules
+- **Match specific values** with custom formatters
+
+<Note>
+  Formatters are primarily available in TypeScript. Python uses simpler formatting utilities.
+</Note>
+
+## Creating a formatter
+
+The `waxify` function creates formatters for template literals.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter } from '@hiveio/wax';
+
+    const chain = await createHiveChain();
+
+    // Create a formatter with default settings
+    const formatter = WaxFormatter.create(chain);
+
+    // Or with custom options
+    const customFormatter = WaxFormatter.create(chain, {
+      locales: 'en-US',
+      createDefaultFormatters: true
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Using waxify
+
+The `waxify` function creates tagged template literals for formatting.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter } from '@hiveio/wax';
+
+    const chain = await createHiveChain();
+    const formatter = WaxFormatter.create(chain);
+    const waxify = formatter.createTemplateTag();
+
+    // Get account data
+    const accounts = await chain.api.database_api.find_accounts({
+      accounts: ['alice']
+    });
+    const account = accounts.accounts[0];
+
+    // Format with waxify template
+    const formatted = waxify`
+      Account: ${account.name}
+      Balance: ${account.balance}
+      Voting Power: ${account.voting_power}
+    `;
+
+    console.log(formatted);
+    // Output:
+    // Account: alice
+    // Balance: 1,000.000 HIVE
+    // Voting Power: 10,000
+    ```
+  </Tab>
+</Tabs>
+
+## Formatting numbers
+
+Format numbers with locale-specific separators and precision.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter } from '@hiveio/wax';
+
+    const chain = await createHiveChain();
+    const formatter = WaxFormatter.create(chain);
+
+    // Format a number with precision
+    const formatted = formatter.formatNumber(
+      1234567.89,
+      3,  // precision
+      'en-US'  // locale
+    );
+    console.log(formatted);  // "1,234,567.890"
+
+    // Different locales
+    const frenchFormat = formatter.formatNumber(
+      1234567.89,
+      2,
+      'fr-FR'
+    );
+    console.log(frenchFormat);  // "1 234 567,89"
+
+    // Format large numbers (beyond MAX_SAFE_INTEGER)
+    const bigNumber = formatter.formatNumber(
+      "123456789012345678901234567890",
+      6
+    );
+    console.log(bigNumber);
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  WAX formatters can handle numbers larger than JavaScript's `MAX_SAFE_INTEGER` by working with string representations.
+</Info>
+
+## Formatting assets
+
+Format cryptocurrency amounts from satoshis to human-readable values.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter } from '@hiveio/wax';
+
+    const chain = await createHiveChain();
+    const formatter = WaxFormatter.create(chain);
+    const waxify = formatter.createTemplateTag();
+
+    // Get account balance
+    const accounts = await chain.api.database_api.find_accounts({
+      accounts: ['alice']
+    });
+    const account = accounts.accounts[0];
+
+    // Format asset amounts
+    const formatted = waxify`
+      HIVE Balance: ${account.balance}
+      HBD Balance: ${account.hbd_balance}
+      Savings: ${account.savings_hbd_balance}
+      Vesting: ${account.vesting_shares}
+    `;
+
+    console.log(formatted);
+    // Output:
+    // HIVE Balance: 1,234.567 HIVE
+    // HBD Balance: 89.012 HBD
+    // Savings: 100.000 HBD
+    // Vesting: 1,234,567.890123 VESTS
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # Python uses direct asset conversion
+    from wax import create_hive_chain
+
+    async def format_assets():
+        chain = create_hive_chain()
+        
+        # Get account
+        accounts = await chain.api.database_api.find_accounts(
+            accounts=['alice']
+        )
+        account = accounts.accounts[0]
+
+        # Format amounts manually
+        hive_amount = float(account.balance.amount) / 1000  # 3 decimals
+        hbd_amount = float(account.hbd_balance.amount) / 1000
+        
+        print(f'HIVE Balance: {hive_amount:,.3f} HIVE')
+        print(f'HBD Balance: {hbd_amount:,.3f} HBD')
+
+    import asyncio
+    asyncio.run(format_assets())
+    ```
+  </Tab>
+</Tabs>
+
+## Custom formatters
+
+Create custom formatters for specific data types or patterns.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter, WaxFormatterBase } from '@hiveio/wax';
+    import type { IWaxBaseInterface } from '@hiveio/wax';
+
+    // Define custom formatter class
+    class MyCustomFormatter extends WaxFormatterBase {
+      constructor(private readonly wax: IWaxBaseInterface) {
+        super();
+      }
+
+      // Format timestamp to readable date
+      @WaxFormatterBase.matchProperty('timestamp')
+      formatTimestamp({ source, target }: any): string {
+        const date = new Date(source.timestamp);
+        return date.toLocaleString();
+      }
+
+      // Format reputation score
+      @WaxFormatterBase.matchProperty('reputation')
+      formatReputation({ source }: any): string {
+        const reputation = source.reputation;
+        // Convert Hive reputation to readable format
+        const rep = Math.log10(reputation) * 9 - 56;
+        return rep.toFixed(2);
+      }
+
+      // Format voting power percentage
+      @WaxFormatterBase.matchProperty('voting_power')
+      formatVotingPower({ source }: any): string {
+        const power = source.voting_power / 100;
+        return `${power.toFixed(2)}%`;
+      }
+    }
+
+    // Use custom formatter
+    const chain = await createHiveChain();
+    const formatter = WaxFormatter.create(chain).extend(MyCustomFormatter);
+    const waxify = formatter.createTemplateTag();
+
+    const accounts = await chain.api.database_api.find_accounts({
+      accounts: ['alice']
+    });
+    const account = accounts.accounts[0];
+
+    const formatted = waxify`
+      Account: ${account.name}
+      Reputation: ${account.reputation}
+      Voting Power: ${account.voting_power}
+      Last Update: ${account.last_vote_time}
+    `;
+
+    console.log(formatted);
+    ```
+  </Tab>
+</Tabs>
+
+## Property matchers
+
+Match specific property names for custom formatting.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { WaxFormatterBase } from '@hiveio/wax';
+
+    class PropertyMatcherFormatter extends WaxFormatterBase {
+      // Match any property named 'balance'
+      @WaxFormatterBase.matchProperty('balance')
+      formatBalance({ source }: any): string {
+        return `${source.balance.amount} ${source.balance.symbol}`;
+      }
+
+      // Match specific value of a property
+      @WaxFormatterBase.matchProperty('type', 'transfer')
+      formatTransferOperation({ source }: any): string {
+        return `Transfer: ${source.amount} from ${source.from} to ${source.to}`;
+      }
+
+      // Require property to be defined
+      @WaxFormatterBase.matchProperty('memo', { requireDefined: true })
+      formatMemo({ source }: any): string {
+        return `Memo: ${source.memo}`;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Instance matchers
+
+Match specific object types or classes.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { WaxFormatterBase } from '@hiveio/wax';
+
+    class InstanceMatcherFormatter extends WaxFormatterBase {
+      // Match Date instances
+      @WaxFormatterBase.matchInstanceOf(Date)
+      formatDate({ source }: any): string {
+        return source.toLocaleDateString();
+      }
+
+      // Match Error instances
+      @WaxFormatterBase.matchInstanceOf(Error)
+      formatError({ source }: any): string {
+        return `Error: ${source.message}`;
+      }
+
+      // Match custom class instances
+      @WaxFormatterBase.matchInstanceOf(MyCustomClass)
+      formatCustomClass({ source }: any): string {
+        return source.toString();
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Formatter options
+
+Customize formatter behavior with options.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter } from '@hiveio/wax';
+
+    const chain = await createHiveChain();
+
+    // Create formatter with custom options
+    const formatter = WaxFormatter.create(chain, {
+      // Set locale for number formatting
+      locales: 'en-US',
+      
+      // Create default formatters for common types
+      createDefaultFormatters: true,
+      
+      // Custom decimal separator
+      decimalSeparator: ',',
+      
+      // Custom thousand separator
+      thousandSeparator: ' '
+    });
+
+    // Extend with additional options
+    const extendedFormatter = formatter.extend({
+      locales: 'de-DE'
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+Here's a complete example using formatters to display account information.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createHiveChain } from '@hiveio/wax';
+    import { WaxFormatter, WaxFormatterBase } from '@hiveio/wax';
+    import type { IWaxBaseInterface } from '@hiveio/wax';
+
+    // Define custom formatter
+    class AccountFormatter extends WaxFormatterBase {
+      constructor(private readonly wax: IWaxBaseInterface) {
+        super();
+      }
+
+      @WaxFormatterBase.matchProperty('reputation')
+      formatReputation({ source }: any): string {
+        const rep = Math.log10(source.reputation) * 9 - 56;
+        return rep.toFixed(0);
+      }
+
+      @WaxFormatterBase.matchProperty('voting_power')
+      formatVotingPower({ source }: any): string {
+        return `${(source.voting_power / 100).toFixed(2)}%`;
+      }
+
+      @WaxFormatterBase.matchProperty('created')
+      formatDate({ source }: any): string {
+        const date = new Date(source.created);
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+    }
+
+    // Main function
+    async function displayAccountInfo(username: string) {
+      // Initialize chain and formatter
+      const chain = await createHiveChain();
+      const formatter = WaxFormatter.create(chain).extend(AccountFormatter);
+      const waxify = formatter.createTemplateTag();
+
+      // Fetch account data
+      const accounts = await chain.api.database_api.find_accounts({
+        accounts: [username]
+      });
+      
+      if (accounts.accounts.length === 0) {
+        console.log(`Account ${username} not found`);
+        return;
+      }
+
+      const account = accounts.accounts[0];
+
+      // Format and display
+      const info = waxify`
+        ╔════════════════════════════════════╗
+        ║  Account Information               ║
+        ╠════════════════════════════════════╣
+        ║ Username:      ${account.name}
+        ║ Reputation:    ${account.reputation}
+        ║ Created:       ${account.created}
+        ║ 
+        ║ Balances:
+        ║   HIVE:        ${account.balance}
+        ║   HBD:         ${account.hbd_balance}
+        ║   Savings:     ${account.savings_hbd_balance}
+        ║
+        ║ Voting:
+        ║   Power:       ${account.voting_power}
+        ║   Mana:        ${account.voting_manabar.current_mana}
+        ║
+        ║ Vesting:
+        ║   Shares:      ${account.vesting_shares}
+        ╚════════════════════════════════════╝
+      `;
+
+      console.log(info);
+    }
+
+    // Run
+    displayAccountInfo('alice').catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use template tags for consistent formatting">
+    Template tags ensure consistent formatting across your application.
+
+    ```typescript
+    const waxify = formatter.createTemplateTag();
+    
+    // Consistent formatting everywhere
+    const msg1 = waxify`Balance: ${account.balance}`;
+    const msg2 = waxify`Amount: ${transfer.amount}`;
+    ```
+  </Accordion>
+
+  <Accordion title="Create reusable formatter classes">
+    Group related formatting logic into reusable classes.
+
+    ```typescript
+    class CurrencyFormatter extends WaxFormatterBase {
+      // All currency-related formatting
+    }
+
+    class DateFormatter extends WaxFormatterBase {
+      // All date-related formatting
+    }
+
+    const formatter = WaxFormatter.create(chain)
+      .extend(CurrencyFormatter)
+      .extend(DateFormatter);
+    ```
+  </Accordion>
+
+  <Accordion title="Handle edge cases in custom formatters">
+    Always handle undefined, null, or invalid values.
+
+    ```typescript
+    @WaxFormatterBase.matchProperty('balance')
+    formatBalance({ source }: any): string {
+      if (!source.balance || !source.balance.amount) {
+        return 'N/A';
+      }
+      return `${source.balance.amount} ${source.balance.symbol}`;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Test formatters with various locales">
+    If your app supports multiple locales, test formatting with each.
+
+    ```typescript
+    const locales = ['en-US', 'de-DE', 'fr-FR', 'ja-JP'];
+    
+    for (const locale of locales) {
+      const formatter = WaxFormatter.create(chain, { locales: locale });
+      const formatted = formatter.formatNumber(1234567.89, 2, locale);
+      console.log(`${locale}: ${formatted}`);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Building transactions" icon="code" href="/guides/building-transactions">
+    Start building transactions with WAX
+  </Card>
+  <Card title="Complex operations" icon="puzzle-piece" href="/guides/complex-operations">
+    Use high-level operation helpers
+  </Card>
+  <Card title="TypeScript API" icon="book" href="/api/typescript/wax-base-interface">
+    Explore the full API reference
+  </Card>
+  <Card title="Examples" icon="flask" href="/typescript/examples">
+    See more formatting examples
+  </Card>
+</CardGroup>

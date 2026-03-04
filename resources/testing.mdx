@@ -1,0 +1,411 @@
+---
+title: Testing and examples
+description: Run tests and examples for WAX Python and TypeScript implementations
+---
+
+This guide covers running tests and examples for both WAX implementations.
+
+## Python testing
+
+### Running all tests
+
+From the repository root:
+
+```bash
+./python/tests/wax/run_tests.sh
+```
+
+This script will:
+
+1. Install dependencies using pnpm
+2. Start the mock server on port 4000
+3. Run pytest with the test suite
+4. Generate a JUnit XML report
+
+### Test configuration
+
+The test script uses the following environment variables:
+
+- `TIMEOUT_PROXY_MOCK_SERVER_SECONDS`: Timeout for mock server startup (default: 30)
+- `MOCK_SERVER_PORT`: Port for the mock server (default: 4000)
+- `PYTHONPATH`: Set to `${WAX_DIR}python` for absolute imports
+
+### Running specific tests
+
+Pass additional pytest arguments to the script:
+
+```bash
+# Run with verbose output
+./python/tests/wax/run_tests.sh -vvv
+
+# Run specific test directory
+./python/tests/wax/run_tests.sh ./tests/operation_visitor
+
+# Run with specific markers
+poetry -C python/wax run pytest -m "not slow" python/tests/wax/
+```
+
+### Running helpy tests
+
+Test the helper utilities:
+
+```bash
+cd python/tests/wax/helpy_test
+python3 -m pytest -n auto --durations 0 --junitxml=report.xml
+```
+
+### Test structure
+
+Python tests are organized in:
+
+```
+python/tests/
+├── wax/               # Main test suite
+│   ├── run_tests.sh   # Test runner script
+│   ├── helpy_test/    # Helper utility tests
+│   └── simple_flow/   # Basic workflow tests
+└── test_tools/        # Testing tool tests
+    ├── unit_tests/    # Unit tests
+    └── hived_handle_tests/  # Integration tests
+```
+
+### Mock server
+
+Tests use a mock server to simulate Hive API responses. The mock server is defined in:
+
+- **TypeScript implementation**: `ts/wasm/__tests__/assets/proxy-mock-server.ts`
+- **Start script**: `ts/wasm/__tests__/assets/start-proxy-mock-server.ts`
+
+The mock server automatically starts before tests and provides consistent responses for testing.
+
+## TypeScript testing
+
+### Running all tests
+
+From the `ts/` directory:
+
+```bash
+pnpm run test
+```
+
+This runs all test projects using Playwright.
+
+### Running specific test projects
+
+Run individual test suites:
+
+```bash
+# Run main test suite
+pnpm run test -- --project=wax_testsuite
+
+# Run health checker tests
+pnpm run test -- --project=healthchecker_tests
+
+# Run operation factory tests
+pnpm run test -- --project=wax_operation_factories
+
+# Run benchmark tests
+pnpm run test -- --project=wax_testsuite_protocol_benchmarks
+```
+
+### Test projects
+
+The CI pipeline runs tests in parallel across multiple projects:
+
+- `wax_testsuite`: Main test suite
+- `healthchecker_tests`: Health check functionality
+- `wax_utils`: Utility function tests
+- `wax_non_encrypted_operations`: Non-encrypted operation tests
+- `wax_mock_tests`: Mock server tests
+- `wax_encrypted_operations`: Encrypted operation tests
+- `wax_custom_chain_online_tx`: Custom chain tests
+- `wax_testsuite_custom_chain_options`: Custom chain options
+- `wax_regression_tests`: Regression test suite
+- `wax_operation_factories`: Operation factory tests
+- `wax_testsuite_protocol_benchmarks`: Performance benchmarks
+
+### Test configuration
+
+Tests are configured in `ts/playwright.config.ts` with multiple projects defined for parallel execution.
+
+### Running benchmarks
+
+Run performance benchmarks:
+
+```bash
+pnpm run benchmark
+```
+
+## Python examples
+
+### Running Python examples
+
+From the repository root:
+
+```bash
+./examples/python/run_example.sh
+```
+
+Or run individual examples:
+
+```bash
+cd examples/python/examples
+python create_and_sign_transaction.py
+```
+
+### Installing example dependencies
+
+```bash
+cd examples/python
+poetry install
+```
+
+### Environment variables
+
+Examples use the following optional environment variables:
+
+- `PASSWORD`: Wallet password (optional, defaults provided)
+- `WALLET_NAME`: Wallet name (optional)
+- `ACCOUNT_NAME`: Hive account name
+- `TRANSFER_RECEIVER`: Transfer recipient account
+- `PRIVATE_KEY`: Account private key
+- `PUBLIC_KEY`: Account public key
+- `HIVED_ADDRESS`: Hive node endpoint URL
+
+Example:
+
+```bash
+export ACCOUNT_NAME="myaccount"
+export PRIVATE_KEY="5J..."
+export HIVED_ADDRESS="https://api.hive.blog"
+python create_and_sign_transaction.py
+```
+
+### Available Python examples
+
+Examples are located in `examples/python/examples/`:
+
+- `create_and_sign_transaction.py`: Build and sign transactions
+- Transaction building examples
+- API call examples
+- Complex operation examples
+
+## TypeScript examples
+
+### Running TypeScript examples
+
+From the `ts/` directory:
+
+```bash
+pnpm run examples
+```
+
+### Running signature extension examples
+
+```bash
+pnpm run examples:signature-extension
+```
+
+### Example projects
+
+TypeScript examples demonstrate various frameworks and use cases:
+
+```
+examples/ts/
+├── node-app/              # Node.js CLI application
+├── nextjs-app/            # Next.js application
+├── react-vite/            # React with Vite
+├── vue-vite/              # Vue with Vite
+├── vue-webpack/           # Vue with Webpack
+├── nuxt-app/              # Nuxt.js application
+├── react-router-ssr/      # React Router SSR
+├── html/                  # Plain HTML/JS
+├── signature-extension/   # Browser extension example
+├── signers-external/      # External signer integration
+└── memory-used/           # Memory usage profiling
+```
+
+Each example includes:
+
+- `package.json`: Dependencies and scripts
+- `README.md`: Example-specific instructions
+- Source code demonstrating WAX usage
+
+## CI/CD testing
+
+### Pipeline test stages
+
+The GitLab CI pipeline runs comprehensive tests:
+
+#### Python tests
+
+1. **test_wax_protobuf_python**: Main Python test suite
+   - Runs pytest with mock server
+   - Generates JUnit XML reports
+   - Tests all Python versions (3.12, 3.14)
+
+2. **test_wax_protobuf_python_pattern**: Verify generated proto files
+   - Compares generated files against patterns
+   - Ensures proto generation is consistent
+
+3. **test_wax_protobuf_python_examples**: Run example scripts
+   - Validates all examples work correctly
+
+4. **test_helpy**: Test helper utilities
+   - Runs pytest with auto-discovery
+   - Tests run in parallel with `-n auto`
+
+#### TypeScript tests
+
+1. **test_wax_wasm**: Main TypeScript test suite
+   - Runs in parallel across multiple test projects
+   - Uses Playwright for browser testing
+   - Matrix of test groups for faster execution
+
+2. **test_wax_wasm_proto_pattern**: Verify generated proto files
+   - Compares TypeScript proto files against patterns
+   - Validates npm package contents
+
+3. **test_wax_wasm_examples**: Run example applications
+   - Validates examples build and run correctly
+   - Tests framework integrations
+
+4. **test_wax_wasm_signature_extension**: Test browser extension
+   - Validates signature extension example
+
+### Test requirements
+
+<Note>
+  All CI jobs must pass - marking jobs as `allow_failure` is not permitted in this project.
+</Note>
+
+### Local testing before pushing
+
+Always test locally before pushing:
+
+```bash
+# Python
+./python/tests/wax/run_tests.sh
+poetry -C python/ run ruff check .
+poetry -C python/ run mypy .
+
+# TypeScript
+cd ts
+pnpm run test
+pnpm run lint
+```
+
+## Test-tools package
+
+The test-tools package provides utilities for testing:
+
+### Running test-tools unit tests
+
+```bash
+python3 -m pytest -n auto -m "not requires_hived_executables" python/tests/test_tools/unit_tests
+```
+
+### Running test-tools integration tests
+
+```bash
+export HIVED_HTTP_ENDPOINT="https://api.hive.blog/"
+python3 -m pytest -n auto --hived-http-endpoint="${HIVED_HTTP_ENDPOINT}" python/tests/test_tools/hived_handle_tests
+```
+
+## Linting and static analysis
+
+### Python linting
+
+From the `python/` directory:
+
+```bash
+# Run Ruff linter
+poetry run ruff check .
+
+# Run MyPy type checker
+poetry run mypy .
+
+# Run pre-commit checks
+pre-commit run --all-files
+```
+
+### TypeScript linting
+
+From the `ts/` directory:
+
+```bash
+pnpm run lint
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Mock server won't start">
+    Check if port 4000 is already in use:
+    
+    ```bash
+    lsof -i :4000
+    kill -9 <PID>
+    ```
+    
+    Or use a different port:
+    
+    ```bash
+    export MOCK_SERVER_PORT=4001
+    ./python/tests/wax/run_tests.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Import errors in tests">
+    Ensure PYTHONPATH is set correctly:
+    
+    ```bash
+    export PYTHONPATH="${PWD}/python:${PYTHONPATH}"
+    ```
+    
+    Or use the test script which sets it automatically:
+    
+    ```bash
+    ./python/tests/wax/run_tests.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Playwright browser not found">
+    Install Playwright browsers:
+    
+    ```bash
+    cd ts
+    pnpm exec playwright install
+    ```
+  </Accordion>
+  
+  <Accordion title="Tests fail with Python version mismatch">
+    Ensure you're using the correct Python version:
+    
+    ```bash
+    python3 --version  # Should be 3.12 or 3.14
+    poetry env use python3.12
+    ```
+  </Accordion>
+  
+  <Accordion title="pnpm install fails">
+    Try clearing the pnpm cache:
+    
+    ```bash
+    pnpm store prune
+    rm -rf node_modules
+    pnpm install
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Contributing" icon="code-pull-request" href="/resources/contributing">
+    Learn how to contribute to WAX
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/resources/troubleshooting">
+    Find solutions to common issues
+  </Card>
+</CardGroup>

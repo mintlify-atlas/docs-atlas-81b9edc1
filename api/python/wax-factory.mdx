@@ -1,0 +1,211 @@
+---
+title: Wax factory
+description: Factory functions to create Wax instances for offline and online blockchain operations
+---
+
+The Wax factory module provides two main functions to create instances for working with the Hive blockchain. Use `create_wax_foundation()` for offline operations like transaction building and validation, or `create_hive_chain()` for online operations that require API connectivity.
+
+## create_wax_foundation
+
+Creates a Wax base interface for offline blockchain operations.
+
+```python
+from wax import create_wax_foundation, WaxOptions
+
+wax = create_wax_foundation()
+
+# With custom chain ID (e.g., testnet)
+wax = create_wax_foundation(
+    WaxOptions(chain_id="0000000000000000000000000000000000000000000000000000000000000000")
+)
+```
+
+### Parameters
+
+<ParamField path="options" type="WaxOptions | None" default="None">
+  Configuration options for the Wax instance.
+  
+  <Expandable title="WaxOptions properties">
+    <ParamField path="chain_id" type="ChainId" default="mainnet">
+      Chain ID used for signing transactions. Defaults to Hive mainnet chain ID.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="IWaxBaseInterface" type="IWaxBaseInterface">
+  An instance providing offline blockchain operations including:
+  - Transaction creation and validation
+  - Cryptographic operations (signing, key generation)
+  - Asset conversions and calculations
+  - Manabar calculations
+</ResponseField>
+
+### Example
+
+```python
+from wax import create_wax_foundation
+from wax.proto.operations import transfer
+
+wax = create_wax_foundation()
+
+# Create a transaction with TAPOS
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000000000000000000000000000000000000000"
+)
+
+# Push an operation
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+)
+
+# Get transaction digest for signing
+digest = tx.sig_digest
+```
+
+---
+
+## create_hive_chain
+
+Creates a Hive chain interface for online blockchain operations with API connectivity.
+
+```python
+from wax import create_hive_chain, WaxChainOptions
+
+# Connect to mainnet
+chain = create_hive_chain()
+
+# Connect to specific endpoint
+chain = create_hive_chain(
+    WaxChainOptions(endpoint_url="https://api.hive.blog")
+)
+
+# Connect to testnet
+chain = create_hive_chain(
+    WaxChainOptions(
+        chain_id="18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e",
+        endpoint_url="https://testnet.openhive.network"
+    )
+)
+```
+
+### Parameters
+
+<ParamField path="options" type="WaxChainOptions | None" default="None">
+  Configuration options for the Hive chain connection.
+  
+  <Expandable title="WaxChainOptions properties">
+    <ParamField path="chain_id" type="ChainId" default="mainnet">
+      Chain ID used for signing transactions. Defaults to Hive mainnet chain ID.
+    </ParamField>
+    
+    <ParamField path="endpoint_url" type="HttpUrl | str" default="https://api.hive.blog">
+      URL of the Hive node to connect to. Defaults to mainnet node.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="IHiveChainInterface" type="IHiveChainInterface">
+  An instance providing all offline operations plus:
+  - API access to Hive node endpoints
+  - Transaction broadcasting
+  - Automatic TAPOS data retrieval
+  - Account authority collection
+  - On-chain verification
+</ResponseField>
+
+### Example
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import vote
+from beekeepy import AsyncBeekeeper
+
+async def main():
+    chain = create_hive_chain()
+    
+    # Create transaction with automatic TAPOS
+    tx = await chain.create_transaction()
+    
+    # Add operation
+    tx.push_operation(
+        vote(
+            voter="alice",
+            author="bob",
+            permlink="example-post",
+            weight=10000
+        )
+    )
+    
+    # Sign and broadcast
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(name="my_wallet", password="secret")
+        await wallet.import_key(private_key="5J...")
+        
+        await tx.sign(wallet=wallet, public_key="STM...")
+        await chain.broadcast(tx)
+    
+    # Use API endpoints
+    accounts = await chain.api.database_api.find_accounts(accounts=["alice", "bob"])
+    print(f"Found {len(accounts.accounts)} accounts")
+    
+    # Clean up
+    chain.teardown()
+
+asyncio.run(main())
+```
+
+### API access
+
+The returned chain instance provides access to Hive API endpoints through the `api` property:
+
+```python
+chain = create_hive_chain()
+
+# Database API
+accounts = await chain.api.database_api.find_accounts(accounts=["alice"])
+dgpo = await chain.api.database_api.get_dynamic_global_properties()
+
+# Account History API
+history = await chain.api.account_history_api.get_account_history(
+    account="alice",
+    start=-1,
+    limit=10
+)
+
+# Network Broadcast API (for broadcasting transactions)
+await chain.api.network_broadcast_api.broadcast_transaction(trx=tx.to_api_json())
+```
+
+### Extending APIs
+
+You can extend the default API collection with custom endpoints:
+
+```python
+from beekeepy.handle.remote import AbstractAsyncApi
+
+class BlockApi(AbstractAsyncApi):
+    @AbstractAsyncApi.endpoint_jsonrpc
+    async def get_block_header(self, *, block_num: int):
+        ...
+
+class MyApiCollection:
+    def __init__(self):
+        self.block_api = BlockApi
+
+chain = create_hive_chain()
+extended_chain = chain.extends(MyApiCollection)
+
+# Use custom API
+header = await extended_chain.api.block_api.get_block_header(block_num=123)
+```

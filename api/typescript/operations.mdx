@@ -1,0 +1,660 @@
+---
+title: Operation types
+description: Hive blockchain operation types and structures
+---
+
+Operations represent actions on the Hive blockchain. The WAX SDK supports both inline operations and complex operation builders for common tasks.
+
+## Operation structure
+
+### Protobuf operations
+
+Operations in protobuf format use a discriminated union structure:
+
+```typescript
+type operation = {
+  vote?: vote;
+  comment_operation?: comment;
+  transfer?: transfer;
+  // ... other operation types
+};
+```
+
+### API operations
+
+Operations in API format use a type-value structure:
+
+```typescript
+interface ApiOperation {
+  type: string;
+  value: Record<string, any>;
+}
+```
+
+#### Example
+
+```typescript
+// Protobuf format (used in SDK)
+const op: operation = {
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+};
+
+// API format (for external tools)
+const apiOp: ApiOperation = {
+  type: "vote",
+  value: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+};
+```
+
+## Common operations
+
+### vote
+
+Upvote or downvote content.
+
+```typescript
+{
+  vote: {
+    voter: string;      // Account casting the vote
+    author: string;     // Content author
+    permlink: string;   // Content identifier
+    weight: number;     // Vote weight: -10000 to 10000
+  }
+}
+```
+
+<ParamField path="voter" type="string" required>
+  Account name casting the vote
+</ParamField>
+
+<ParamField path="author" type="string" required>
+  Author of the content being voted on
+</ParamField>
+
+<ParamField path="permlink" type="string" required>
+  Unique identifier of the content
+</ParamField>
+
+<ParamField path="weight" type="number" required>
+  Vote weight from -10000 (full downvote) to 10000 (full upvote)
+</ParamField>
+
+#### Usage example
+
+```typescript
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+```
+
+### comment_operation
+
+Create or update a post or comment.
+
+```typescript
+{
+  comment_operation: {
+    parent_author: string;      // Parent author (empty for posts)
+    parent_permlink: string;    // Parent permlink or category
+    author: string;             // Author of the comment
+    permlink: string;           // Unique identifier
+    title: string;              // Title (usually empty for comments)
+    body: string;               // Content body
+    json_metadata: string;      // JSON string with metadata
+  }
+}
+```
+
+**Note:** For easier comment/post creation, use [BlogPostOperation](#blogpostoperation) or [ReplyOperation](#replyoperation).
+
+### transfer
+
+Transfer HIVE or HBD between accounts.
+
+```typescript
+{
+  transfer: {
+    from: string;        // Sender account
+    to: string;          // Recipient account
+    amount: NaiAsset;    // Amount to transfer
+    memo: string;        // Optional memo (can be encrypted)
+  }
+}
+```
+
+<ParamField path="from" type="string" required>
+  Sender account name
+</ParamField>
+
+<ParamField path="to" type="string" required>
+  Recipient account name
+</ParamField>
+
+<ParamField path="amount" type="NaiAsset" required>
+  Amount to transfer in NAI format
+</ParamField>
+
+<ParamField path="memo" type="string">
+  Optional memo. Can be encrypted by using startEncrypt/stopEncrypt.
+</ParamField>
+
+#### Usage example
+
+```typescript
+tx.pushOperation({
+  transfer: {
+    from: "alice",
+    to: "bob",
+    amount: wax.hiveCoins(10),
+    memo: "Payment for services"
+  }
+});
+```
+
+### transfer_to_savings
+
+Transfer funds to savings.
+
+```typescript
+{
+  transfer_to_savings: {
+    from: string;
+    to: string;
+    amount: NaiAsset;
+    memo: string;
+  }
+}
+```
+
+### transfer_from_savings
+
+Withdraw funds from savings (requires 3-day waiting period).
+
+```typescript
+{
+  transfer_from_savings: {
+    from: string;
+    request_id: number;
+    to: string;
+    amount: NaiAsset;
+    memo: string;
+  }
+}
+```
+
+### transfer_to_vesting
+
+Power up HIVE to Hive Power.
+
+```typescript
+{
+  transfer_to_vesting: {
+    from: string;
+    to: string;
+    amount: NaiAsset;  // Must be HIVE
+  }
+}
+```
+
+### withdraw_vesting
+
+Power down Hive Power (13-week withdrawal).
+
+```typescript
+{
+  withdraw_vesting: {
+    account: string;
+    vesting_shares: NaiAsset;  // Must be VESTS
+  }
+}
+```
+
+### delegate_vesting_shares
+
+Delegate Hive Power to another account.
+
+```typescript
+{
+  delegate_vesting_shares: {
+    delegator: string;
+    delegatee: string;
+    vesting_shares: NaiAsset;  // Must be VESTS
+  }
+}
+```
+
+### custom_json
+
+Submit custom JSON data (used by layer 2 applications).
+
+```typescript
+{
+  custom_json: {
+    required_auths: string[];         // Active authority accounts
+    required_posting_auths: string[]; // Posting authority accounts
+    id: string;                       // Application identifier
+    json: string;                     // JSON string payload
+  }
+}
+```
+
+#### Usage example
+
+```typescript
+tx.pushOperation({
+  custom_json: {
+    required_auths: [],
+    required_posting_auths: ["alice"],
+    id: "follow",
+    json: JSON.stringify(["follow", {
+      follower: "alice",
+      following: "bob",
+      what: ["blog"]
+    }])
+  }
+});
+```
+
+### account_update2
+
+Update account authorities and metadata.
+
+```typescript
+{
+  account_update2: {
+    account: string;
+    owner?: authority;
+    active?: authority;
+    posting?: authority;
+    memo_key?: string;
+    json_metadata?: string;
+    posting_json_metadata?: string;
+    extensions: any[];
+  }
+}
+```
+
+### witness_vote
+
+Vote for a witness.
+
+```typescript
+{
+  account_witness_vote: {
+    account: string;    // Voter account
+    witness: string;    // Witness account
+    approve: boolean;   // true to vote, false to unvote
+  }
+}
+```
+
+### account_witness_proxy
+
+Set witness voting proxy.
+
+```typescript
+{
+  account_witness_proxy: {
+    account: string;  // Account setting proxy
+    proxy: string;    // Proxy account (empty to remove)
+  }
+}
+```
+
+### recurrent_transfer
+
+Set up recurring transfer.
+
+```typescript
+{
+  recurrent_transfer: {
+    from: string;
+    to: string;
+    amount: NaiAsset;
+    memo: string;
+    recurrence: number;    // Hours between transfers
+    executions: number;    // Number of times to execute (2-24)
+    extensions: any[];
+  }
+}
+```
+
+**Note:** For easier recurrent transfer management, use [DefineRecurrentTransferOperation](#definerecurrenttransferoperation).
+
+### claim_reward_balance
+
+Claim rewards from the reward balance.
+
+```typescript
+{
+  claim_reward_balance: {
+    account: string;
+    reward_hive: NaiAsset;
+    reward_hbd: NaiAsset;
+    reward_vests: NaiAsset;
+  }
+}
+```
+
+## Complex operation builders
+
+Complex operations provide high-level interfaces for common tasks.
+
+### BlogPostOperation
+
+Creates a blog post with metadata.
+
+```typescript
+import { BlogPostOperation } from '@hiveio/wax';
+
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  category: "hive-174695",          // Community or main tag
+  title: "My Awesome Post",
+  body: "Post content here...",
+  permlink: "my-awesome-post",      // Optional, auto-generated if omitted
+  tags: ["blog", "travel"],
+  description: "A post about travel",
+  images: ["https://example.com/image.jpg"],
+  beneficiaries: [                  // Optional
+    { account: "beneficiary1", weight: 1000 }
+  ],
+  maxAcceptedPayout: 1000000,       // Optional, in HBD satoshis
+  percentHbd: 10000,                // Optional, 10000 = 100%
+  allowVotes: true,                 // Optional
+  allowCurationRewards: true        // Optional
+}));
+```
+
+<ParamField path="author" type="string" required>
+  Author account name
+</ParamField>
+
+<ParamField path="category" type="string" required>
+  Community identifier (e.g., "hive-174695") or main tag
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Post title
+</ParamField>
+
+<ParamField path="body" type="string" required>
+  Post content (markdown/HTML)
+</ParamField>
+
+<ParamField path="permlink" type="string">
+  Unique identifier. Auto-generated if not provided.
+</ParamField>
+
+<ParamField path="tags" type="string[]">
+  Post tags
+</ParamField>
+
+<ParamField path="description" type="string">
+  Post description
+</ParamField>
+
+<ParamField path="images" type="string[]">
+  Image URLs in the post
+</ParamField>
+
+<ParamField path="beneficiaries" type="Array<{account: string, weight: number}>">
+  Beneficiaries for post rewards. Creates an additional comment_options operation.
+</ParamField>
+
+### ReplyOperation
+
+Creates a reply to a post or comment.
+
+```typescript
+import { ReplyOperation } from '@hiveio/wax';
+
+tx.pushOperation(new ReplyOperation({
+  parentAuthor: "bob",
+  parentPermlink: "original-post",
+  author: "alice",
+  body: "Great post!",
+  permlink: "re-bob-original-post",  // Optional
+  title: "",                          // Optional, usually empty for replies
+}));
+```
+
+<ParamField path="parentAuthor" type="string" required>
+  Author of the post/comment being replied to
+</ParamField>
+
+<ParamField path="parentPermlink" type="string" required>
+  Permlink of the post/comment being replied to
+</ParamField>
+
+<ParamField path="author" type="string" required>
+  Reply author account name
+</ParamField>
+
+<ParamField path="body" type="string" required>
+  Reply content
+</ParamField>
+
+### DefineRecurrentTransferOperation
+
+Creates or updates a recurrent transfer.
+
+```typescript
+import { DefineRecurrentTransferOperation } from '@hiveio/wax';
+
+tx.pushOperation(new DefineRecurrentTransferOperation({
+  from: "alice",
+  to: "bob",
+  amount: wax.hiveCoins(10),
+  memo: "Monthly payment",
+  recurrence: 720,        // 30 days in hours
+  executions: 12,         // 12 months
+  pairId: 1              // Optional unique identifier
+}));
+```
+
+### RecurrentTransferRemovalOperation
+
+Removes an existing recurrent transfer.
+
+```typescript
+import { RecurrentTransferRemovalOperation } from '@hiveio/wax';
+
+tx.pushOperation(new RecurrentTransferRemovalOperation({
+  from: "alice",
+  to: "bob",
+  pairId: 1
+}));
+```
+
+### AccountAuthorityUpdateOperation
+
+Updates account authorities.
+
+```typescript
+import { AccountAuthorityUpdateOperation } from '@hiveio/wax';
+
+tx.pushOperation(new AccountAuthorityUpdateOperation({
+  account: "alice",
+  // Define new authorities...
+}));
+```
+
+### UpdateProposalOperation
+
+Updates a DHF proposal.
+
+```typescript
+import { UpdateProposalOperation } from '@hiveio/wax';
+
+tx.pushOperation(new UpdateProposalOperation({
+  proposalId: 123,
+  creator: "alice",
+  dailyPay: wax.hbdCoins(100),
+  subject: "Updated proposal",
+  permlink: "my-proposal",
+  endDate: new Date("2025-12-31")
+}));
+```
+
+### WitnessSetPropertiesOperation
+
+Sets witness properties with automatic serialization.
+
+```typescript
+import { WitnessSetPropertiesOperation } from '@hiveio/wax';
+
+tx.pushOperation(new WitnessSetPropertiesOperation({
+  owner: "alice",
+  props: {
+    accountCreationFee: wax.hiveCoins(3),
+    accountSubsidyBudget: 50000,
+    accountSubsidyDecay: 330782,
+    maximumBlockSize: 65536,
+    hbdInterestRate: 1200,
+    url: "https://example.com",
+    newSigningKey: "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU"
+  }
+}));
+```
+
+## Hive apps operations
+
+### FollowOperation
+
+Manage follow relationships.
+
+```typescript
+import { FollowOperation } from '@hiveio/wax';
+
+// Follow
+tx.pushOperation(new FollowOperation({
+  follower: "alice",
+  following: "bob",
+  follow: ["blog"]  // Can be: ["blog"], ["ignore"], or []
+}));
+
+// Unfollow
+tx.pushOperation(new FollowOperation({
+  follower: "alice",
+  following: "bob",
+  follow: []
+}));
+```
+
+### CommunityOperation
+
+Manage community settings.
+
+```typescript
+import { CommunityOperation } from '@hiveio/wax';
+
+tx.pushOperation(new CommunityOperation({
+  communityId: "hive-174695",
+  account: "alice",
+  // Operation-specific parameters...
+}));
+```
+
+### ResourceCreditsOperation
+
+Delegate or remove delegation of resource credits.
+
+```typescript
+import { ResourceCreditsOperation } from '@hiveio/wax';
+
+// Delegate RC
+tx.pushOperation(new ResourceCreditsOperation({
+  from: "alice",
+  delegatees: ["bob", "charlie"],
+  maxRc: 1000000000
+}));
+```
+
+## Custom operation base class
+
+You can create custom complex operations by extending `OperationBase`:
+
+```typescript
+import { OperationBase, IOperationSink, operation } from '@hiveio/wax';
+
+class MyCustomOperation extends OperationBase {
+  constructor(private data: MyOperationData) {
+    super();
+  }
+
+  finalize(sink: IOperationSink): Iterable<operation> {
+    // Return one or more operations
+    return [{
+      vote: {
+        voter: this.data.voter,
+        author: this.data.author,
+        permlink: this.data.permlink,
+        weight: this.data.weight
+      }
+    }];
+  }
+}
+
+// Usage
+tx.pushOperation(new MyCustomOperation({
+  voter: "alice",
+  author: "bob",
+  permlink: "post",
+  weight: 10000
+}));
+```
+
+## TypeScript types
+
+### NaiAsset
+
+```typescript
+interface NaiAsset {
+  amount: string;      // Amount in satoshis
+  precision: number;   // Decimal precision
+  nai: string;         // Asset identifier
+}
+```
+
+### authority
+
+```typescript
+interface authority {
+  weight_threshold: number;
+  account_auths: Record<string, number>;
+  key_auths: Record<string, number>;
+}
+```
+
+### operation
+
+```typescript
+type operation = {
+  vote?: vote;
+  comment_operation?: comment;
+  transfer?: transfer;
+  // ... 60+ operation types
+};
+```
+
+## See also
+
+- [ITransaction](/api/typescript/transaction) - Transaction building
+- [Complex Operations Guide](/guides/complex-operations) - Detailed complex operation usage
+- [IWaxBaseInterface](/api/typescript/wax-base-interface) - Asset creation methods

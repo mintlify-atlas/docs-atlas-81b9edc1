@@ -1,0 +1,290 @@
+---
+title: Changelog
+description: Version history and changes for WAX SDK
+---
+
+Track the evolution of the WAX SDK across versions.
+
+## Versioning scheme
+
+WAX uses [PEP 440](https://peps.python.org/pep-0440/) compliant versioning for Python packages and [Semantic Versioning](https://semver.org/) for TypeScript packages.
+
+### Python versioning
+
+Version format: `MAJOR.MINOR.PATCH[{rc|a|b}N][.{post|dev}TIMESTAMP][+LOCAL]`
+
+Examples (assuming last tag is `1.2.3rc1`):
+
+- **Tag (distance=0, clean)**: `1.2.3rc1`
+- **Tag (distance=0, dirty)**: `1.2.3rc1+dirty`
+- **Develop (distance>0)**: `1.2.3rc1.post20260129082556`
+- **Develop (dirty)**: `1.2.3rc1.post20260129082556+dirty`
+- **Feature branch (distance>0)**: `1.2.3rc1.dev20260129082556+unstable`
+- **Feature branch (dirty)**: `1.2.3rc1.dev20260129082556+unstable.dirty`
+
+### TypeScript versioning
+
+Version format: `MAJOR.MINOR.PATCH[-{alpha|beta|rc}.N]`
+
+Examples:
+
+- **Release**: `1.2.3`
+- **Release candidate**: `1.2.3-rc.1`
+- **Beta**: `1.2.3-beta.1`
+- **Alpha**: `1.2.3-alpha.1`
+
+### Stability detection
+
+- **Stable**: `develop`, `master`, `main` branches OR tag checkout
+- **Unstable**: Feature branches OR detached HEAD with distance > 0
+- **CI**: Uses `CI_COMMIT_REF_NAME` environment variable for branch detection
+
+### Version ordering
+
+Newest last:
+
+```
+1.2.3rc1.dev20260129082556+unstable  <  1.2.3rc1  <  1.2.3rc1.post20260129082556
+(feature branch, before tag)            (tag)        (develop, after tag)
+```
+
+<Note>
+  Feature branch versions are always lower than the tag, providing double protection:
+  1. Pre-release filtering (default)
+  2. Numerically lower version
+</Note>
+
+## Release process
+
+### Python releases
+
+1. Tag the commit with version:
+   ```bash
+   git tag -a v1.2.3rc1 -m "Release 1.2.3rc1"
+   git push origin v1.2.3rc1
+   ```
+
+2. CI pipeline automatically:
+   - Builds wheels for Python 3.12 and 3.14
+   - Runs full test suite
+   - Deploys to GitLab package registry
+   - Deploys to PyPI (for production tags)
+
+3. Version is automatically determined by `poetry-dynamic-versioning`
+
+### TypeScript releases
+
+1. Update version in `package.json`:
+   ```bash
+   cd ts/wasm
+   npm version 1.2.3-rc.1
+   ```
+
+2. Commit and tag:
+   ```bash
+   git add package.json
+   git commit -m "chore: bump version to 1.2.3-rc.1"
+   git tag -a v1.2.3-rc.1 -m "Release 1.2.3-rc.1"
+   git push origin develop --tags
+   ```
+
+3. CI pipeline automatically:
+   - Builds WASM package
+   - Runs full test suite
+   - Deploys to GitLab npm registry
+   - Deploys to npmjs.org (for production tags)
+
+## Version history
+
+<Note>
+  For the complete version history, see the [GitLab releases page](https://gitlab.syncad.com/hive/wax/-/releases) or check the git tags.
+</Note>
+
+### Python releases
+
+Packages are published to:
+
+- **Development**: [GitLab Package Registry](https://gitlab.syncad.com/hive/wax/-/packages)
+- **Production**: [PyPI](https://pypi.org/project/hiveio-wax/)
+
+Example versions:
+
+- `0.0.3a2.dev131+bb99c4e`: Development version from develop branch
+- `1.0.0rc1`: Release candidate 1 for version 1.0.0
+- `1.0.0`: Production release
+
+### TypeScript releases
+
+Packages are published to:
+
+- **Development**: [GitLab npm Registry](https://gitlab.syncad.com/hive/wax/-/packages)
+- **Production**: [npmjs.org](https://www.npmjs.com/package/@hiveio/wax)
+
+### Current versions
+
+To check current versions:
+
+```bash
+# Python
+pip show hiveio-wax
+
+# TypeScript
+npm show @hiveio/wax version
+```
+
+## Breaking changes
+
+Major version bumps indicate breaking changes. Review the following before upgrading:
+
+<AccordionGroup>
+  <Accordion title="Python 3.12+ requirement">
+    WAX now requires Python 3.12 or higher. Python 3.14 is also supported.
+    
+    **Migration**: Upgrade your Python version to 3.12 or 3.14.
+    
+    ```bash
+    python3 --version  # Should be 3.12 or 3.14
+    ```
+  </Accordion>
+  
+  <Accordion title="hiveio-api dependency pinning">
+    WAX now pins the `hiveio-api` package to a specific version that matches the hived submodule.
+    
+    **Current pinned version**: `1.28.6rc8.post20260227150305`
+    
+    **Migration**: No action required - the correct version is automatically installed.
+  </Accordion>
+  
+  <Accordion title="Protocol buffer updates">
+    Protocol buffer definitions are updated from the hive submodule. Generated code may change.
+    
+    **Migration**: Regenerate your protocol buffer bindings if you're using custom protos.
+    
+    ```bash
+    # Python
+    ./python/wax/scripts/compile_proto.sh
+    
+    # TypeScript
+    cd ts && pnpm run build
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Deprecation policy
+
+Features are deprecated with the following process:
+
+1. **Announcement**: Deprecation is announced in the changelog
+2. **Warning period**: Feature remains available with deprecation warnings (minimum 1 major version)
+3. **Removal**: Feature is removed in the next major version
+
+Example:
+
+- **v1.0.0**: Feature X is marked as deprecated
+- **v1.1.0 - v1.9.0**: Feature X continues to work with warnings
+- **v2.0.0**: Feature X is removed
+
+## Dependencies
+
+### Python dependencies
+
+Key dependencies from `pyproject.toml`:
+
+- **Python**: `>=3.12,<4`
+- **protobuf**: `^6.33.0`
+- **httpx**: `^0.28.0` (with http2 extras)
+- **loguru**: `^0.7.2`
+- **hiveio-api**: `==1.28.6rc8.post20260227150305` (pinned)
+
+### TypeScript dependencies
+
+Key dependencies for TypeScript:
+
+- **Node.js**: `20.11+` or `21.2+`
+- **TypeScript**: Check `package.json` for current version
+- **Emscripten**: For WASM compilation
+
+### Submodule dependencies
+
+- **hive**: Hive blockchain source (git submodule)
+  - Current ref: `fc62add05d43865434390f9ee713d11364f70b8a`
+- **npm-common-config**: CI configuration (git submodule)
+  - Current ref: `de95661b1be71e968f623945609dc384aefecfe2`
+
+<Warning>
+  When updating submodules, ensure the GitLab CI include refs match the submodule commits. This is verified by the `verify_include_refs` CI job.
+</Warning>
+
+## Migration guides
+
+<AccordionGroup>
+  <Accordion title="Upgrading from development to stable">
+    When upgrading from a development version to a stable release:
+    
+    ```bash
+    # Python
+    pip install --upgrade hiveio-wax
+    
+    # TypeScript
+    npm update @hiveio/wax
+    ```
+    
+    Review the changelog for breaking changes between versions.
+  </Accordion>
+  
+  <Accordion title="Switching between Python versions">
+    WAX provides wheels for multiple Python versions. To switch:
+    
+    ```bash
+    # Create new virtual environment
+    python3.14 -m venv venv314
+    source venv314/bin/activate
+    
+    # Install WAX
+    pip install hiveio-wax
+    ```
+  </Accordion>
+  
+  <Accordion title="Updating from GitLab registry">
+    To use development versions from GitLab:
+    
+    ```bash
+    # Python
+    pip install --extra-index-url https://gitlab.syncad.com/api/v4/groups/136/-/packages/pypi/simple hiveio-wax
+    
+    # TypeScript
+    npm config set @hiveio:registry https://gitlab.syncad.com/api/v4/projects/362/packages/npm/
+    npm install @hiveio/wax
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Release notifications
+
+Stay updated with new releases:
+
+<CardGroup cols={2}>
+  <Card title="GitLab releases" icon="gitlab" href="https://gitlab.syncad.com/hive/wax/-/releases">
+    View all releases with detailed notes
+  </Card>
+  <Card title="npm registry" icon="npm" href="https://www.npmjs.com/package/@hiveio/wax">
+    TypeScript package releases
+  </Card>
+  <Card title="PyPI" icon="python" href="https://pypi.org/project/hiveio-wax/">
+    Python package releases
+  </Card>
+  <Card title="GitLab activity" icon="rss" href="https://gitlab.syncad.com/hive/wax/-/activity">
+    Follow project activity
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the latest version
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/resources/contributing">
+    Contribute to the next release
+  </Card>
+</CardGroup>

@@ -1,0 +1,579 @@
+---
+title: TypeScript interfaces and types
+description: Type definitions for the WAX TypeScript SDK
+---
+
+This page documents the core TypeScript interfaces and types used throughout the WAX SDK.
+
+## Asset types
+
+### NaiAsset
+
+Represents a Hive asset in NAI (Named Asset Identifier) format.
+
+```typescript
+interface NaiAsset {
+  amount: string;      // Amount in satoshis (integer)
+  precision: number;   // Decimal precision (3 for HIVE/HBD, 6 for VESTS)
+  nai: string;         // Asset identifier (@@000000021 for HIVE)
+}
+```
+
+#### Examples
+
+```typescript
+// 100.000 HIVE
+const hive: NaiAsset = {
+  amount: "100000",
+  precision: 3,
+  nai: "@@000000021"
+};
+
+// 50.000 HBD
+const hbd: NaiAsset = {
+  amount: "50000",
+  precision: 3,
+  nai: "@@000000013"
+};
+
+// 1000.000000 VESTS
+const vests: NaiAsset = {
+  amount: "1000000000",
+  precision: 6,
+  nai: "@@000000037"
+};
+```
+
+### IHiveAssetData
+
+Represents a Hive asset in human-readable format.
+
+```typescript
+interface IHiveAssetData {
+  amount: string;   // Amount with decimal point ("100.000")
+  symbol: string;   // Asset symbol ("HIVE", "HBD", "VESTS")
+}
+```
+
+### TNaiAssetConvertible
+
+Accepted types for asset amount conversion.
+
+```typescript
+type TNaiAssetConvertible = number | string | bigint;
+```
+
+### TNaiAssetSource
+
+Accepted types for asset operations.
+
+```typescript
+type TNaiAssetSource = TNaiAssetConvertible | NaiAsset;
+```
+
+## Time types
+
+### TTimestamp
+
+Represents a timestamp in various formats.
+
+```typescript
+type TTimestamp = Date | number | string;
+```
+
+#### Accepted formats
+
+- `Date` object
+- Unix timestamp in milliseconds (number)
+- ISO 8601 date string
+- Relative time: `"+10s"`, `"+30m"`, `"+1h"`
+
+#### Examples
+
+```typescript
+const timestamps: TTimestamp[] = [
+  new Date(),
+  Date.now(),
+  "2025-03-04T12:00:00Z",
+  "+30m"
+];
+```
+
+## Cryptographic types
+
+### THexString
+
+Represents a hexadecimal string.
+
+```typescript
+type THexString = string;
+```
+
+### TPublicKey
+
+Represents a public key in WIF format.
+
+```typescript
+type TPublicKey = string;
+```
+
+#### Example
+
+```typescript
+const pubKey: TPublicKey = "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU";
+```
+
+### TSignature
+
+Represents a transaction signature.
+
+```typescript
+type TSignature = string;
+```
+
+### IPrivateKeyData
+
+Contains private key and associated public key.
+
+```typescript
+interface IPrivateKeyData {
+  associatedPublicKey: string;  // Public key in WIF format
+  wifPrivateKey: string;        // Private key in WIF format
+}
+```
+
+### IBrainKeyData
+
+Contains brain key and derived keys.
+
+```typescript
+interface IBrainKeyData extends IPrivateKeyData {
+  brainKey: string;             // Brain key phrase
+  wifPrivateKey: string;        // Derived private key
+  associatedPublicKey: string;  // Derived public key
+}
+```
+
+## Blockchain types
+
+### TBlockHash
+
+Represents a block ID.
+
+```typescript
+type TBlockHash = string;  // 20 byte string or hex string (40 characters)
+```
+
+#### Example
+
+```typescript
+const blockId: TBlockHash = "0000000000000000000000000000000000000000";
+```
+
+### TTransactionId
+
+Represents a transaction ID.
+
+```typescript
+type TTransactionId = string;  // 20 byte string or hex string (40 characters)
+```
+
+### TAccountName
+
+Represents a Hive account name.
+
+```typescript
+type TAccountName = string;
+```
+
+#### Validation rules
+
+- Must comply with RFC 1035 grammar
+- All lowercase letters
+- Length: 3-16 characters (inclusive)
+- Can contain: a-z, 0-9, hyphens (-), dots (.)
+
+## Authority types
+
+### authority
+
+Defines account authority structure.
+
+```typescript
+interface authority {
+  weight_threshold: number;                  // Minimum weight required
+  account_auths: Record<string, number>;     // Account name → weight
+  key_auths: Record<string, number>;         // Public key → weight
+}
+```
+
+#### Example
+
+```typescript
+const auth: authority = {
+  weight_threshold: 1,
+  account_auths: {},
+  key_auths: {
+    "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU": 1
+  }
+};
+```
+
+### TTransactionRequiredAuthorities
+
+Required authorities for a transaction.
+
+```typescript
+type TTransactionRequiredAuthorities = {
+  posting: Set<string>;      // Accounts requiring posting authority
+  active: Set<string>;       // Accounts requiring active authority
+  owner: Set<string>;        // Accounts requiring owner authority
+  other: Array<authority>;   // Custom authorities
+};
+```
+
+## Configuration types
+
+### IWaxOptions
+
+Configuration for WAX foundation instance.
+
+```typescript
+interface IWaxOptions extends IWaxBaseExtendibleOptions {
+  wasmLocation?: string;  // Path to WASM file
+}
+
+interface IWaxBaseExtendibleOptions {
+  chainId: THexString;    // Chain ID in hex format
+}
+```
+
+### IWaxOptionsChain
+
+Configuration for Hive chain instance.
+
+```typescript
+interface IWaxOptionsChain extends IWaxOptions, IWaxChainExtendibleOptions {}
+
+interface IWaxChainExtendibleOptions extends IWaxBaseExtendibleOptions {
+  apiEndpoint: string;        // JSON-RPC API endpoint
+  restApiEndpoint: string;    // REST API endpoint
+  waxApiCaller?: string;      // X-Wax-Api-Caller header value
+  apiTimeout: number;         // Request timeout in milliseconds
+}
+```
+
+### IChainConfig
+
+Protocol configuration for the chain.
+
+```typescript
+interface IChainConfig {
+  // Chain limits and constants
+  HIVE_MIN_ACCOUNT_NAME_LENGTH: number;
+  HIVE_MAX_ACCOUNT_NAME_LENGTH: number;
+  HIVE_MAX_BLOCK_SIZE: number;
+  // ... many more protocol constants
+}
+```
+
+## Transaction types
+
+### transaction
+
+Protobuf transaction structure.
+
+```typescript
+interface transaction {
+  ref_block_num: number;         // Reference block number (TAPOS)
+  ref_block_prefix: number;      // Reference block prefix (TAPOS)
+  expiration: string;            // Expiration time (ISO 8601)
+  operations: Array<operation>;  // Transaction operations
+  extensions: Array<any>;        // Transaction extensions
+  signatures: Array<string>;     // Transaction signatures
+}
+```
+
+### ApiTransaction
+
+API-form transaction structure.
+
+```typescript
+interface ApiTransaction {
+  ref_block_num: number;
+  ref_block_prefix: number;
+  expiration: string;
+  operations: Array<ApiOperation>;
+  extensions: object[];
+  signatures: string[];
+}
+
+interface ApiOperation {
+  type: string;                  // Operation type name
+  value: Record<string, any>;    // Operation parameters
+}
+```
+
+### LegacyApiTransaction
+
+Legacy API-form transaction structure.
+
+```typescript
+type LegacyApiTransaction = {
+  ref_block_num: number;
+  ref_block_prefix: number;
+  expiration: string;
+  operations: Array<LegacyApiOperation>;
+  extensions: object[];
+  signatures: string[];
+};
+
+type LegacyApiOperation = 
+  | [string, Record<string, any>]   // ["vote", {...}]
+  | [number, Record<string, any>];  // [0, {...}]
+```
+
+## Manabar types
+
+### IManabarData
+
+Represents manabar state.
+
+```typescript
+interface IManabarData {
+  current: bigint;   // Current manabar value
+  max: bigint;       // Maximum manabar value
+  percent: number;   // Percent loaded (0-100 with 2 decimal places)
+}
+```
+
+#### Example
+
+```typescript
+const manabar: IManabarData = {
+  current: BigInt("9500000000"),
+  max: BigInt("10000000000"),
+  percent: 95.00
+};
+```
+
+### EManabarType
+
+Manabar type enumeration.
+
+```typescript
+enum EManabarType {
+  UPVOTE = 0,
+  DOWNVOTE = 1,
+  RC = 2
+}
+```
+
+## Binary view types
+
+### IBinaryViewOutputData
+
+Binary view metadata structure.
+
+```typescript
+interface IBinaryViewOutputData {
+  binary: string;                    // Binary data in hex format
+  offsets: IBinaryViewNode[];        // AST structure with offsets
+}
+```
+
+### IBinaryViewNode
+
+Binary view AST node.
+
+```typescript
+type IBinaryViewNode = 
+  | IBinaryViewScalarNode 
+  | IBinaryViewArrayNode 
+  | IBinaryViewObjectNode;
+
+interface IBinaryViewBaseNode {
+  key: string;      // Node key/name
+  offset: number;   // Byte offset in binary
+  size: number;     // Size in bytes
+}
+
+interface IBinaryViewScalarNode extends IBinaryViewBaseNode {
+  type: "scalar";
+  value: string;
+}
+
+interface IBinaryViewArrayNode extends IBinaryViewBaseNode {
+  type: "array";
+  length: number;
+  children: IBinaryViewNode[];
+  value: string;
+}
+
+interface IBinaryViewObjectNode extends IBinaryViewBaseNode {
+  type: "object";
+  children: IBinaryViewNode[];
+  value?: string;
+}
+```
+
+## Signature provider types
+
+### ISignatureProvider
+
+Interface for signature providers.
+
+```typescript
+interface ISignatureProvider {
+  signDigest(publicKey: TPublicKey, digest: THexString): string;
+  // ... additional methods
+}
+```
+
+### IOnlineEncryptionProvider
+
+Interface for encryption providers.
+
+```typescript
+interface IOnlineEncryptionProvider {
+  encryptData(data: string, publicKey: TPublicKey): Promise<string>;
+  // ... additional methods
+}
+```
+
+## Enum types
+
+### EAssetName
+
+Asset name enumeration.
+
+```typescript
+enum EAssetName {
+  HIVE = "HIVE",
+  HBD = "HBD",
+  VESTS = "VESTS"
+}
+```
+
+### ECommentFormat
+
+Comment format enumeration.
+
+```typescript
+enum ECommentFormat {
+  HTML = "html",
+  MARKDOWN = "markdown",
+  MIXED = "markdown+html"
+}
+```
+
+### EChainApiType
+
+Chain API type enumeration.
+
+```typescript
+enum EChainApiType {
+  JSONRPC = "jsonrpc",
+  REST = "rest"
+}
+```
+
+## Error types
+
+### WaxError
+
+Base error class for WAX SDK errors.
+
+```typescript
+class WaxError extends Error {
+  constructor(message: string);
+}
+```
+
+#### Usage
+
+```typescript
+try {
+  // WAX operations
+} catch (error) {
+  if (error instanceof WaxError) {
+    console.error('WAX error:', error.message);
+  }
+}
+```
+
+## Operation base types
+
+### IOperationSink
+
+Context provided to complex operations during finalization.
+
+```typescript
+interface IOperationSink {
+  api: IWaxBaseInterface;  // Access to WAX API instance
+}
+```
+
+### OperationBase
+
+Base class for complex operations.
+
+```typescript
+abstract class OperationBase {
+  abstract finalize(sink: IOperationSink): Iterable<operation>;
+}
+```
+
+## Type guards
+
+### isPublicKey
+
+Checks if a string is a valid public key.
+
+```typescript
+function isPublicKey(key: string): boolean;
+```
+
+#### Example
+
+```typescript
+import { isPublicKey } from '@hiveio/wax';
+
+const key = "STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU";
+if (isPublicKey(key)) {
+  console.log('Valid public key');
+}
+```
+
+## Utility types
+
+### TDeepWaxApiRequestPartial
+
+Deep partial type for API requests.
+
+```typescript
+type TDeepWaxApiRequestPartial<T> = T extends object ? {
+  [P in keyof T]?: TDeepWaxApiRequestPartial<T[P]>;
+} & Omit<TWaxApiRequest<any, any>, 'params' | 'result'> : T;
+```
+
+### TWaxApiRequest
+
+API request structure.
+
+```typescript
+type TWaxApiRequest<TReq, TRes> = {
+  readonly params: TReq;
+  readonly result: TRes;
+  readonly responseArray?: boolean;
+  readonly method?: string;
+  readonly urlPath?: string;
+};
+```
+
+## See also
+
+- [IWaxBaseInterface](/api/typescript/wax-base-interface) - Base interface methods
+- [IHiveChainInterface](/api/typescript/hive-chain-interface) - Chain interface
+- [ITransaction](/api/typescript/transaction) - Transaction interface
+- [Operations](/api/typescript/operations) - Operation types

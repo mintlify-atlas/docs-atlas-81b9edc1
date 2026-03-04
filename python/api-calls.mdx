@@ -1,0 +1,485 @@
+---
+title: API calls
+description: Query Hive blockchain data using the Python SDK's API interface
+---
+
+The Python SDK provides comprehensive access to Hive blockchain APIs through the `api` property of the chain interface. All API calls are fully async and type-safe.
+
+## Available APIs
+
+The SDK includes three core APIs by default:
+
+- **Database API** - Query blockchain data (accounts, blocks, witnesses, etc.)
+- **Network Broadcast API** - Broadcast transactions to the network
+- **RC API** - Query Resource Credit information
+
+## Accessing APIs
+
+```python
+from wax import create_hive_chain
+
+wax = create_hive_chain()
+
+# Access APIs through the api property
+database = wax.api.database_api
+network_broadcast = wax.api.network_broadcast_api
+rc = wax.api.rc_api
+```
+
+## Database API
+
+Query blockchain data and state.
+
+### Account operations
+
+```python
+# Find accounts
+response = await wax.api.database_api.find_accounts(
+    accounts=["alice", "bob", "charlie"]
+)
+
+for account in response.accounts:
+    print(f"Account: {account.name}")
+    print(f"Balance: {account.balance}")
+    print(f"HBD: {account.hbd_balance}")
+    print(f"Vesting shares: {account.vesting_shares}")
+    print(f"Voting manabar: {account.voting_manabar.current_mana}")
+    print(f"Downvote manabar: {account.downvote_manabar.current_mana}")
+
+# Get account count
+count = await wax.api.database_api.get_account_count()
+print(f"Total accounts: {count}")
+
+# List accounts
+accounts = await wax.api.database_api.list_accounts(
+    start=None,
+    limit=100,
+    order="by_name"
+)
+```
+
+### Block operations
+
+```python
+# Get specific block
+block = await wax.api.database_api.get_block(
+    block_num=80000000
+)
+
+print(f"Previous: {block.previous}")
+print(f"Timestamp: {block.timestamp}")
+print(f"Witness: {block.witness}")
+print(f"Transactions: {len(block.transactions)}")
+
+for tx in block.transactions:
+    print(f"  TX: {len(tx.operations)} operations")
+
+# Get block range
+blocks = await wax.api.database_api.get_block_range(
+    starting_block_num=80000000,
+    count=10
+)
+
+# Get block header
+header = await wax.api.database_api.get_block_header(
+    block_num=80000000
+)
+```
+
+### Dynamic global properties
+
+```python
+# Get current blockchain state
+dgpo = await wax.api.database_api.get_dynamic_global_properties()
+
+print(f"Head block: {dgpo.head_block_number}")
+print(f"Time: {dgpo.time}")
+print(f"Current witness: {dgpo.current_witness}")
+print(f"Total vesting fund: {dgpo.total_vesting_fund_hive}")
+print(f"Total vesting shares: {dgpo.total_vesting_shares}")
+print(f"HBD interest rate: {dgpo.hbd_interest_rate}")
+print(f"Virtual supply: {dgpo.virtual_supply}")
+
+# Use with calculations
+hp_apr = wax.calculate_hp_apr(
+    head_block_num=dgpo.head_block_number,
+    vesting_reward_percent=dgpo.vesting_reward_percent,
+    virtual_supply=dgpo.virtual_supply,
+    total_vesting_fund_hive=dgpo.total_vesting_fund_hive
+)
+print(f"HP APR: {hp_apr}%")
+```
+
+### Witness operations
+
+```python
+# List witnesses
+witnesses = await wax.api.database_api.list_witnesses(
+    start=None,
+    limit=100,
+    order="by_name"
+)
+
+for witness in witnesses.witnesses:
+    print(f"Witness: {witness.owner}")
+    print(f"Votes: {witness.votes}")
+    print(f"URL: {witness.url}")
+
+# Find witnesses
+witness_data = await wax.api.database_api.find_witnesses(
+    owners=["blocktrades", "gtg", "roelandp"]
+)
+
+# Get witness schedule
+schedule = await wax.api.database_api.get_witness_schedule()
+print(f"Current shuffle block: {schedule.current_shuffled_witnesses}")
+
+# List witness votes
+votes = await wax.api.database_api.list_witness_votes(
+    start=None,
+    limit=1000,
+    order="by_account_witness"
+)
+```
+
+### Feed and price operations
+
+```python
+# Get feed history
+feed = await wax.api.database_api.get_feed_history()
+
+print(f"Current median price:")
+print(f"  Base: {feed.current_median_history.base}")
+print(f"  Quote: {feed.current_median_history.quote}")
+
+for price in feed.price_history:
+    print(f"Price: {price.base} / {price.quote}")
+
+# Use for conversions
+hive_value = wax.hbd_to_hive(
+    hbd=wax.hbd.pretty("10.000 HBD"),
+    base=feed.current_median_history.base,
+    quote=feed.current_median_history.quote
+)
+print(f"10 HBD = {hive_value} HIVE")
+```
+
+### Content operations
+
+```python
+# Find comments (posts and comments)
+comments = await wax.api.database_api.find_comments(
+    comments=[
+        {"author": "alice", "permlink": "my-post"},
+        {"author": "bob", "permlink": "my-comment"}
+    ]
+)
+
+for comment in comments.comments:
+    print(f"Author: {comment.author}")
+    print(f"Permlink: {comment.permlink}")
+    print(f"Title: {comment.title}")
+    print(f"Body: {comment.body[:100]}...")
+    print(f"Votes: {comment.net_votes}")
+
+# List comments
+list_response = await wax.api.database_api.list_comments(
+    start=None,
+    limit=100,
+    order="by_author"
+)
+
+# Find votes
+votes = await wax.api.database_api.find_votes(
+    author="alice",
+    permlink="my-post"
+)
+
+for vote in votes.votes:
+    print(f"Voter: {vote.voter}")
+    print(f"Weight: {vote.weight}")
+    print(f"Rshares: {vote.rshares}")
+```
+
+### Proposal operations
+
+```python
+# List proposals
+proposals = await wax.api.database_api.list_proposals(
+    start=None,
+    limit=100,
+    order="by_creator",
+    order_direction="ascending",
+    status="all"  # all, inactive, active, expired, votable
+)
+
+for proposal in proposals.proposals:
+    print(f"Proposal {proposal.proposal_id}: {proposal.subject}")
+    print(f"Creator: {proposal.creator}")
+    print(f"Receiver: {proposal.receiver}")
+    print(f"Daily pay: {proposal.daily_pay}")
+    print(f"Total votes: {proposal.total_votes}")
+
+# List proposal votes
+proposal_votes = await wax.api.database_api.list_proposal_votes(
+    start=None,
+    limit=1000,
+    order="by_voter_proposal",
+    order_direction="ascending",
+    status="all"
+)
+```
+
+## RC API
+
+Query Resource Credit information.
+
+```python
+# Find RC accounts
+rc_response = await wax.api.rc_api.find_rc_accounts(
+    accounts=["alice", "bob"]
+)
+
+for rc_account in rc_response.rc_accounts:
+    print(f"Account: {rc_account.account}")
+    print(f"Max RC: {rc_account.max_rc}")
+    print(f"RC manabar:")
+    print(f"  Current: {rc_account.rc_manabar.current_mana}")
+    print(f"  Last update: {rc_account.rc_manabar.last_update_time}")
+    
+    # Calculate current RC percentage
+    dgpo = await wax.api.database_api.get_dynamic_global_properties()
+    current_rc = wax.calculate_current_manabar_value(
+        head_block_time=dgpo.time,
+        max_mana=rc_account.max_rc,
+        current_mana=rc_account.rc_manabar.current_mana,
+        last_update_time=rc_account.rc_manabar.last_update_time
+    )
+    print(f"  Percent: {current_rc.percent}%")
+    
+    # Calculate regeneration time
+    full_at = wax.calculate_manabar_full_regeneration_time(
+        head_block_time=dgpo.time,
+        max_mana=rc_account.max_rc,
+        current_mana=rc_account.rc_manabar.current_mana,
+        last_update_time=rc_account.rc_manabar.last_update_time
+    )
+    print(f"  Full at: {full_at}")
+```
+
+## Network Broadcast API
+
+Broadcast transactions to the network.
+
+```python
+# Broadcast transaction
+# (Typically done via wax.broadcast(), but can be called directly)
+await wax.api.network_broadcast_api.broadcast_transaction(
+    trx=tx.to_api_json()
+)
+
+# Note: Using wax.broadcast(tx) is preferred as it includes validation
+```
+
+## Extending the API
+
+Add custom endpoints or override existing ones.
+
+### Override existing API
+
+```python
+from wax.api.collection import DatabaseApi as BaseDatabaseApi
+from typing import Any
+
+class DatabaseApi(BaseDatabaseApi):
+    """Extended database API with additional endpoints."""
+    
+    @BaseDatabaseApi.endpoint_jsonrpc
+    async def get_config(self) -> Any:
+        """Get blockchain configuration."""
+        ...
+    
+    @BaseDatabaseApi.endpoint_jsonrpc
+    async def get_hardfork_properties(self) -> Any:
+        """Get hardfork properties."""
+        ...
+```
+
+### Add new API
+
+```python
+from beekeepy.handle.remote import AbstractAsyncApi
+from typing import Any
+
+class BlockApi(AbstractAsyncApi):
+    """Custom block API."""
+    
+    @AbstractAsyncApi.endpoint_jsonrpc
+    async def get_block_header(self, *, block_num: int) -> Any:
+        """Get block header.
+        
+        Args:
+            block_num: Block number to query.
+        """
+        ...
+    
+    @AbstractAsyncApi.endpoint_jsonrpc
+    async def get_ops_in_block(
+        self,
+        *,
+        block_num: int,
+        only_virtual: bool = False
+    ) -> Any:
+        """Get operations in block.
+        
+        Args:
+            block_num: Block number to query.
+            only_virtual: Return only virtual operations.
+        """
+        ...
+```
+
+### Create API collection
+
+```python
+class MyApiCollection:
+    """Custom API collection."""
+    
+    def __init__(self) -> None:
+        self.database_api = DatabaseApi  # Override
+        self.block_api = BlockApi        # New API
+```
+
+### Use extended API
+
+```python
+# Extend the chain interface
+wax = create_hive_chain()
+wax_extended = wax.extends(MyApiCollection)
+
+# Use custom endpoints
+config = await wax_extended.api.database_api.get_config()
+block_header = await wax_extended.api.block_api.get_block_header(block_num=123)
+ops = await wax_extended.api.block_api.get_ops_in_block(
+    block_num=123,
+    only_virtual=True
+)
+```
+
+### Extend REST API
+
+For REST-style endpoints:
+
+```python
+from beekeepy.handle.remote import AbstractAsyncRestApi
+
+class CustomRestApi(AbstractAsyncRestApi):
+    """Custom REST API."""
+    
+    async def custom_endpoint(self, param: str) -> Any:
+        """Custom REST endpoint."""
+        ...
+
+class MyRestApiCollection:
+    def __init__(self) -> None:
+        self.custom_rest = CustomRestApi
+
+wax_extended = wax.extend_rest(MyRestApiCollection)
+result = await wax_extended.api.custom_rest.custom_endpoint(param="value")
+```
+
+## Error handling
+
+```python
+import httpx
+from wax.exceptions import AccountNotFoundError
+
+try:
+    accounts = await wax.api.database_api.find_accounts(
+        accounts=["nonexistent"]
+    )
+except httpx.HTTPError as e:
+    print(f"Network error: {e}")
+except Exception as e:
+    print(f"API error: {e}")
+```
+
+## Complete example
+
+```python
+import asyncio
+from wax import create_hive_chain
+from decimal import Decimal
+
+async def analyze_account(account_name: str):
+    wax = create_hive_chain()
+    
+    try:
+        # Get account data
+        accounts_response = await wax.api.database_api.find_accounts(
+            accounts=[account_name]
+        )
+        
+        if not accounts_response.accounts:
+            print(f"Account {account_name} not found")
+            return
+        
+        account = accounts_response.accounts[0]
+        
+        # Get dynamic global properties
+        dgpo = await wax.api.database_api.get_dynamic_global_properties()
+        
+        # Calculate HP
+        hp = wax.vests_to_hp(
+            vests=account.vesting_shares,
+            total_vesting_fund_hive=dgpo.total_vesting_fund_hive,
+            total_vesting_shares=dgpo.total_vesting_shares
+        )
+        
+        # Calculate voting manabar
+        voting_mana = wax.calculate_current_manabar_value(
+            head_block_time=dgpo.time,
+            max_mana=int(account.post_voting_power.amount),
+            current_mana=account.voting_manabar.current_mana,
+            last_update_time=account.voting_manabar.last_update_time
+        )
+        
+        # Get RC data
+        rc_response = await wax.api.rc_api.find_rc_accounts(
+            accounts=[account_name]
+        )
+        rc_account = rc_response.rc_accounts[0]
+        
+        rc_mana = wax.calculate_current_manabar_value(
+            head_block_time=dgpo.time,
+            max_mana=rc_account.max_rc,
+            current_mana=rc_account.rc_manabar.current_mana,
+            last_update_time=rc_account.rc_manabar.last_update_time
+        )
+        
+        # Print analysis
+        print(f"=== Account Analysis: {account_name} ===")
+        print(f"Balance: {account.balance}")
+        print(f"HBD: {account.hbd_balance}")
+        print(f"HP: {hp}")
+        print(f"Voting mana: {voting_mana.percent}%")
+        print(f"RC: {rc_mana.percent}%")
+        print(f"Posts: {account.post_count}")
+        print(f"Reputation: {account.reputation}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(analyze_account("alice"))
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Transactions" icon="file-lines" href="/python/transactions">
+    Learn about building and broadcasting transactions
+  </Card>
+  <Card title="Examples" icon="code" href="/python/examples">
+    See complete working examples
+  </Card>
+</CardGroup>

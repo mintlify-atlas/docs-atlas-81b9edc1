@@ -1,0 +1,501 @@
+---
+title: Transactions
+description: Build, sign, validate, and broadcast Hive blockchain transactions in Python
+---
+
+Transactions are the fundamental unit for interacting with the Hive blockchain. This guide covers creating, signing, validating, and broadcasting transactions using the Python SDK.
+
+## Transaction interfaces
+
+The SDK provides two transaction interfaces:
+
+- **`ITransaction`** - Base transaction interface for offline operations
+- **`IOnlineTransaction`** - Extended interface with on-chain verification
+
+## Creating transactions
+
+Transactions can be created in three ways:
+
+<Tabs>
+  <Tab title="Online (automatic TAPOS)">
+    ```python
+    from wax import create_hive_chain
+    
+    wax = create_hive_chain()
+    
+    # Automatically fetches TAPOS data from network
+    tx = await wax.create_transaction()
+    # Returns IOnlineTransaction
+    ```
+  </Tab>
+  <Tab title="Offline (manual TAPOS)">
+    ```python
+    from wax import create_wax_foundation
+    from datetime import timedelta
+    
+    wax = create_wax_foundation()
+    
+    # Provide block ID manually
+    tx = wax.create_transaction_with_tapos(
+        tapos_block_id="0000c3e7b1ed0697a9c8e7e1d...",
+        expiration=timedelta(minutes=1)
+    )
+    # Returns ITransaction
+    ```
+  </Tab>
+  <Tab title="From existing data">
+    ```python
+    # From JSON (API format)
+    tx = wax.create_transaction_from_json({
+        "ref_block_num": 50215,
+        "ref_block_prefix": 2140466769,
+        "expiration": "2016-09-15T19:47:33",
+        "operations": [...],
+        "extensions": [],
+        "signatures": []
+    })
+    
+    # From protobuf
+    from wax.proto.transaction import transaction
+    proto_tx = transaction(...)
+    tx = wax.create_transaction_from_proto(proto_tx)
+    ```
+  </Tab>
+</Tabs>
+
+## Adding operations
+
+Add operations using Protocol Buffer messages:
+
+```python
+from wax.proto.operations import transfer, vote, comment
+
+# Single operation
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+)
+
+# Multiple operations
+tx.push_operation(
+    vote(
+        voter="alice",
+        author="bob",
+        permlink="my-post",
+        weight=10000
+    )
+).push_operation(
+    comment(
+        parent_author="",
+        parent_permlink="hive",
+        author="alice",
+        permlink="my-comment",
+        title="Great post!",
+        body="This is a comment",
+        json_metadata="{}"
+    )
+)
+```
+
+<Note>
+The `push_operation()` method returns `self` for method chaining.
+</Note>
+
+## Transaction properties
+
+Access transaction information:
+
+```python
+# Transaction ID (HF26 serialization)
+tx_id = tx.id
+print(f"TX ID: {tx_id}")
+
+# Signature digest for signing
+sig_digest = tx.sig_digest
+print(f"Sig digest: {sig_digest}")
+
+# Check if transaction is signed
+if tx.is_signed:
+    print("Transaction has signatures")
+
+# Get signature public keys
+if tx.is_signed:
+    keys = tx.signature_keys
+    for key in keys:
+        print(f"Signed by: {key}")
+
+# Get impacted accounts
+impacted = tx.impacted_accounts
+print(f"Impacted: {impacted}")
+
+# Get required authorities
+required = tx.required_authorities
+print(f"Posting: {required.posting_accounts}")
+print(f"Active: {required.active_accounts}")
+print(f"Owner: {required.owner_accounts}")
+```
+
+## Signing transactions
+
+### Sign with Beekeeper
+
+The recommended way to sign transactions:
+
+```python
+from beekeepy import AsyncBeekeeper
+
+async def sign_transaction(tx, private_key: str, public_key: str):
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(
+            name="my_wallet",
+            password="password"
+        )
+        
+        # Import key if needed
+        if public_key not in await wallet.public_keys:
+            await wallet.import_key(private_key=private_key)
+        
+        # Sign
+        signature = await tx.sign(wallet=wallet, public_key=public_key)
+        print(f"Signature: {signature}")
+        
+    return tx
+```
+
+### Add signature manually
+
+For offline signing or external signing services:
+
+```python
+# Add pre-computed signature
+signature = "1f2e3d4c5b6a7980..."  # From external signing process
+tx.add_signature(signature)
+```
+
+### Multi-signature transactions
+
+For transactions requiring multiple signatures:
+
+```python
+async def sign_multisig(tx, signers: list[tuple[str, str]]):
+    """Sign transaction with multiple keys.
+    
+    Args:
+        tx: Transaction to sign
+        signers: List of (private_key, public_key) tuples
+    """
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(
+            name="multisig_wallet",
+            password="password"
+        )
+        
+        # Import all keys
+        for private_key, public_key in signers:
+            await wallet.import_key(private_key=private_key)
+        
+        # Sign with each key
+        for _, public_key in signers:
+            await tx.sign(wallet=wallet, public_key=public_key)
+    
+    return tx
+
+# Usage
+tx = await wax.create_transaction()
+tx.push_operation(...)
+
+tx = await sign_multisig(tx, [
+    ("5K...", "STM..."),  # First signer
+    ("5J...", "STM..."),  # Second signer
+])
+```
+
+## Validating transactions
+
+Validate transaction structure and content:
+
+```python
+from wax.exceptions import WaxValidationFailedError
+
+try:
+    tx.validate()
+    print("Transaction is valid")
+except WaxValidationFailedError as e:
+    print(f"Validation failed: {e}")
+```
+
+### On-chain verification
+
+For online transactions, verify accounts exist and check for private key leaks:
+
+```python
+from wax.exceptions import (
+    AccountNotFoundError,
+    PrivateKeyDetectedInMemoError,
+)
+
+try:
+    # Only available for IOnlineTransaction
+    await tx.perform_on_chain_verification()
+    print("On-chain verification passed")
+except AccountNotFoundError as e:
+    print(f"Account not found: {e}")
+except PrivateKeyDetectedInMemoError:
+    print("Private key detected in operation content!")
+```
+
+<Warning>
+The `perform_on_chain_verification()` method is only available for transactions created with `create_transaction()` (online mode).
+</Warning>
+
+## Serializing transactions
+
+Convert transactions to various formats:
+
+```python
+# To JSON string (protobuf JSON format)
+json_str = tx.to_string()
+
+# To API JSON (Hive API format)
+api_json = tx.to_api_json()
+print(api_json)
+# {
+#   "ref_block_num": 50215,
+#   "ref_block_prefix": 2140466769,
+#   "expiration": "2016-09-15T19:47:33",
+#   "operations": [...],
+#   "extensions": [],
+#   "signatures": [...]
+# }
+
+# To API dict
+api_dict = tx.to_dict()
+
+# To API string
+api_str = tx.to_api()
+
+# To binary (HF26 serialization)
+binary = tx.to_binary_form()
+print(f"Binary: {binary}")  # Hex string
+```
+
+## Broadcasting transactions
+
+### With hive chain
+
+```python
+from wax import create_hive_chain
+from wax.exceptions import TransactionNotSignedError
+
+wax = create_hive_chain()
+
+try:
+    tx = await wax.create_transaction()
+    tx.push_operation(...)
+    
+    # Sign transaction
+    await tx.sign(wallet=wallet, public_key=public_key)
+    
+    # Broadcast (automatically performs verification for IOnlineTransaction)
+    await wax.broadcast(tx)
+    print(f"Broadcasted! TX: {tx.id}")
+    
+except TransactionNotSignedError:
+    print("Transaction must be signed before broadcasting")
+except Exception as e:
+    print(f"Broadcast failed: {e}")
+```
+
+### Direct API call
+
+```python
+# Use network_broadcast_api directly
+await wax.api.network_broadcast_api.broadcast_transaction(
+    trx=tx.to_api_json()
+)
+```
+
+## Transaction expiration
+
+Set custom expiration times:
+
+```python
+from datetime import timedelta, datetime
+
+# Using timedelta (relative to current time)
+tx = await wax.create_transaction(
+    expiration=timedelta(minutes=5)
+)
+
+# Using datetime (absolute time)
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000c3e7...",
+    expiration=datetime(2024, 1, 15, 10, 30, 0)
+)
+```
+
+<Note>
+Default expiration is 1 minute from creation time.
+</Note>
+
+## TAPOS (Transaction as Proof of Stake)
+
+TAPOS links transactions to a recent block, preventing replay attacks:
+
+```python
+# Online: automatic TAPOS
+tx = await wax.create_transaction()
+print(f"Ref block: {tx.transaction.ref_block_num}")
+
+# Offline: manual TAPOS
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000c3e7b1ed0697a9c8e7e1d..."
+)
+```
+
+## Complex operations
+
+Use high-level operation builders for complex scenarios:
+
+### Account authority update
+
+```python
+from wax.complex_operations.account_update import AccountAuthorityUpdateOperation
+
+# Create operation (automatically fetches current authorities)
+account_update = await AccountAuthorityUpdateOperation.create_for(
+    wax, "alice"
+)
+
+# Modify authorities
+account_update.roles.posting.add("bob", weight=1)
+account_update.roles.active.add("charlie", weight=1)
+account_update.roles.memo.set("STM...new_memo_key...")
+
+# Add to transaction
+tx = await wax.create_transaction()
+tx.push_operation(account_update)
+```
+
+### Recurrent transfer
+
+```python
+from wax.complex_operations.recurrent_transfer import RecurrentTransferOperation
+
+recurrent = RecurrentTransferOperation(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.pretty("1.000 HIVE"),
+    memo="Monthly payment",
+    recurrence=24,  # Hours between executions
+    executions=12   # Number of times to execute
+)
+
+tx.push_operation(recurrent)
+```
+
+## Complete example
+
+Putting it all together:
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import transfer, vote
+from beekeepy import AsyncBeekeeper
+
+async def main():
+    wax = create_hive_chain()
+    
+    try:
+        # Create transaction with multiple operations
+        tx = await wax.create_transaction()
+        
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=wax.hive.satoshis(1000),
+                memo="Payment"
+            )
+        ).push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="great-post",
+                weight=10000
+            )
+        )
+        
+        # Validate before signing
+        tx.validate()
+        print(f"Transaction valid: {tx.id}")
+        print(f"Impacted accounts: {tx.impacted_accounts}")
+        
+        # Sign
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(
+                name="wallet",
+                password="password"
+            )
+            await wallet.import_key(private_key="5K...")
+            await tx.sign(wallet=wallet, public_key="STM...")
+        
+        print(f"Signed by: {tx.signature_keys}")
+        
+        # Broadcast
+        await wax.broadcast(tx)
+        print(f"Success! TX: {tx.id}")
+        
+    finally:
+        wax.teardown()
+
+asyncio.run(main())
+```
+
+## Error handling
+
+```python
+from wax.exceptions import (
+    TransactionNotSignedError,
+    WaxValidationFailedError,
+    AccountNotFoundError,
+    PrivateKeyDetectedInMemoError,
+)
+
+try:
+    tx = await wax.create_transaction()
+    tx.push_operation(...)
+    tx.validate()
+    await tx.perform_on_chain_verification()
+    await wax.broadcast(tx)
+    
+except TransactionNotSignedError:
+    print("Transaction must be signed")
+except WaxValidationFailedError as e:
+    print(f"Validation error: {e}")
+except AccountNotFoundError as e:
+    print(f"Account not found: {e}")
+except PrivateKeyDetectedInMemoError:
+    print("Security issue: private key in memo")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="API calls" icon="server" href="/python/api-calls">
+    Learn about querying blockchain data
+  </Card>
+  <Card title="Examples" icon="code" href="/python/examples">
+    See complete working examples
+  </Card>
+</CardGroup>

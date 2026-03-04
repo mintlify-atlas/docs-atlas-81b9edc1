@@ -1,0 +1,245 @@
+---
+title: "Keychain signer"
+description: "Integrate Hive Keychain browser extension for transaction signing"
+---
+
+The Keychain signer enables integration with Hive Keychain, a popular browser extension wallet for the Hive blockchain. This allows your users to sign transactions securely using their existing Keychain setup.
+
+## Overview
+
+Hive Keychain is a widely-used browser extension that stores users' Hive private keys securely. By integrating the Keychain signer, you can leverage the existing Keychain user base and provide a familiar signing experience.
+
+## Prerequisites
+
+Your users must have:
+
+- [Hive Keychain browser extension](https://hive-keychain.com/) installed
+- At least one Hive account imported with the appropriate keys
+
+## Installation
+
+Install the Keychain signer package:
+
+```bash
+npm install @hiveio/wax-signers-keychain
+```
+
+## Basic usage
+
+Here's how to use the Keychain signer with WAX:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import KeychainProvider from "@hiveio/wax-signers-keychain";
+
+const chain = await createHiveChain();
+
+// Create the Keychain provider
+const provider = KeychainProvider.for("myaccount", "active");
+
+// Create transaction
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "myaccount",
+    author: "author",
+    permlink: "post-permlink",
+    weight: 10000
+  }
+});
+
+// Sign with Keychain (opens Keychain popup)
+await provider.signTransaction(tx);
+
+// Broadcast the transaction
+await chain.broadcast(tx);
+```
+
+## Key authorities
+
+Specify which key authority to use when creating the provider:
+
+```typescript
+// Use posting key (for votes, comments, follows)
+const postingProvider = KeychainProvider.for("username", "posting");
+
+// Use active key (for transfers, power ups)
+const activeProvider = KeychainProvider.for("username", "active");
+
+// Use owner key (for account changes - use with caution)
+const ownerProvider = KeychainProvider.for("username", "owner");
+```
+
+<Warning>
+Always use the lowest-privilege key that can perform the operation:
+- **Posting**: For social operations (votes, posts, follows)
+- **Active**: For financial operations (transfers, conversions)
+- **Owner**: Only for critical account operations
+</Warning>
+
+## Detecting Keychain
+
+Check if Keychain is installed before using the provider:
+
+```typescript
+function isKeychainInstalled(): boolean {
+  return typeof window !== 'undefined' && 
+         window.hive_keychain !== undefined;
+}
+
+if (!isKeychainInstalled()) {
+  console.error("Please install Hive Keychain extension");
+  // Redirect to installation page or show error
+}
+```
+
+## User experience
+
+When you call `signTransaction()`, Keychain will:
+
+1. Display a popup showing the transaction details
+2. Ask the user to confirm the operation
+3. Sign the transaction with their private key
+4. Return the signed transaction to your application
+
+<Tip>
+The popup gives users full transparency about what they're signing, improving trust and security.
+</Tip>
+
+## Example: Transfer with Keychain
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import KeychainProvider from "@hiveio/wax-signers-keychain";
+
+async function transferWithKeychain(
+  from: string,
+  to: string,
+  amount: string,
+  memo: string
+) {
+  const chain = await createHiveChain();
+  const provider = KeychainProvider.for(from, "active");
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    transfer: {
+      from,
+      to,
+      amount: chain.hiveCoins(amount),
+      memo
+    }
+  });
+  
+  // User will see Keychain popup
+  await provider.signTransaction(tx);
+  
+  const result = await chain.broadcast(tx);
+  return result;
+}
+
+// Usage
+await transferWithKeychain(
+  "alice",
+  "bob",
+  "10.000",
+  "Thanks for the coffee!"
+);
+```
+
+## Example: Multiple operations
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import KeychainProvider from "@hiveio/wax-signers-keychain";
+
+async function upvoteAndFollow(username: string, author: string, permlink: string) {
+  const chain = await createHiveChain();
+  const provider = KeychainProvider.for(username, "posting");
+  
+  const tx = await chain.createTransaction();
+  
+  // Add vote operation
+  tx.pushOperation({
+    vote: {
+      voter: username,
+      author,
+      permlink,
+      weight: 10000
+    }
+  });
+  
+  // Add follow operation
+  tx.pushOperation({
+    custom_json: {
+      required_auths: [],
+      required_posting_auths: [username],
+      id: "follow",
+      json: JSON.stringify([
+        "follow",
+        {
+          follower: username,
+          following: author,
+          what: ["blog"]
+        }
+      ])
+    }
+  });
+  
+  // Single Keychain popup for both operations
+  await provider.signTransaction(tx);
+  await chain.broadcast(tx);
+}
+```
+
+## Error handling
+
+```typescript
+try {
+  await provider.signTransaction(tx);
+} catch (error) {
+  if (error.message.includes("user_cancel")) {
+    console.log("User cancelled the transaction");
+  } else if (error.message.includes("missing_key")) {
+    console.log("Account key not found in Keychain");
+  } else {
+    console.error("Signing failed:", error);
+  }
+}
+```
+
+## Key features
+
+<CardGroup cols={2}>
+
+<Card title="User-controlled" icon="user-check">
+  Users maintain full control of their private keys.
+</Card>
+
+<Card title="Transparent" icon="eye">
+  Every transaction is shown to users before signing.
+</Card>
+
+<Card title="Widely adopted" icon="users">
+  Large existing user base in the Hive ecosystem.
+</Card>
+
+<Card title="Multi-account" icon="id-card">
+  Supports multiple accounts in a single extension.
+</Card>
+
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Transactions" icon="file-signature" href="/guides/building-transactions">
+  Learn more about building transactions.
+</Card>
+
+<Card title="Operations" icon="gears" href="/concepts/operations">
+  Explore available Hive operations.
+</Card>
+
+</CardGroup>

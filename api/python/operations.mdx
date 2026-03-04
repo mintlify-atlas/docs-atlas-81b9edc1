@@ -1,0 +1,865 @@
+---
+title: Operations
+description: Hive blockchain operation types for transactions
+---
+
+Operations represent actions on the Hive blockchain. Each operation is a protocol buffer message that can be added to transactions.
+
+## Importing operations
+
+All operations are available from `wax.proto.operations`:
+
+```python
+from wax.proto.operations import (
+    transfer,
+    vote,
+    comment,
+    transfer_to_vesting,
+    withdraw_vesting,
+    account_update2,
+    # ... and many more
+)
+```
+
+## Operation types
+
+The `Operation` type is a union type alias:
+
+```python
+from wax.models.operations import Operation, WaxMetaOperation, ProtoOperation
+
+# Operation can be:
+# - Proto operation (protobuf Message)
+# - Protocol operation (dict or str in HF26 format)
+operation: Operation = transfer(...)
+
+# WaxMetaOperation is used internally (Message or OperationBase)
+wax_operation: WaxMetaOperation = transfer(...)
+```
+
+<ResponseField name="Operation" type="TypeAlias">
+  Union of `ProtoOperation | ProtocolOperation` - any operation format.
+</ResponseField>
+
+<ResponseField name="WaxMetaOperation" type="TypeAlias">
+  Union of `Message | OperationBase` - internal operation representation.
+</ResponseField>
+
+<ResponseField name="ProtoOperation" type="TypeAlias">
+  Union of `dict[str, Any] | str | Message` - types convertible to proto.
+</ResponseField>
+
+<ResponseField name="ProtocolOperation" type="TypeAlias">
+  Union of `dict[str, Any] | str` - HF26 protocol format.
+</ResponseField>
+
+---
+
+## Transfer operations
+
+### transfer
+
+Transfers HIVE or HBD between accounts.
+
+```python
+from wax import create_wax_foundation
+from wax.proto.operations import transfer
+
+wax = create_wax_foundation()
+
+op = transfer(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.satoshis(1000),  # 1.000 HIVE
+    memo="Payment for services"
+)
+```
+
+<ParamField path="from_account" type="str" required>
+  Sender account name.
+</ParamField>
+
+<ParamField path="to_account" type="str" required>
+  Receiver account name.
+</ParamField>
+
+<ParamField path="amount" type="NaiAsset" required>
+  Amount to transfer (HIVE or HBD in NAI format).
+</ParamField>
+
+<ParamField path="memo" type="str" default="">
+  Transfer memo (can be encrypted).
+</ParamField>
+
+---
+
+### recurrent_transfer
+
+Sets up recurring transfers between accounts.
+
+```python
+from wax.proto.operations import recurrent_transfer
+
+op = recurrent_transfer(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.satoshis(100),
+    memo="Monthly payment",
+    recurrence=24,  # Every 24 hours
+    executions=12   # 12 times total
+)
+```
+
+<ParamField path="from_account" type="str" required>
+  Sender account name.
+</ParamField>
+
+<ParamField path="to_account" type="str" required>
+  Receiver account name.
+</ParamField>
+
+<ParamField path="amount" type="NaiAsset" required>
+  Amount per transfer.
+</ParamField>
+
+<ParamField path="memo" type="str" default="">
+  Transfer memo.
+</ParamField>
+
+<ParamField path="recurrence" type="int" required>
+  Hours between transfers (minimum 24).
+</ParamField>
+
+<ParamField path="executions" type="int" required>
+  Total number of transfers to execute.
+</ParamField>
+
+---
+
+### transfer_to_savings
+
+Transfers funds to savings account.
+
+```python
+from wax.proto.operations import transfer_to_savings
+
+op = transfer_to_savings(
+    from_account="alice",
+    to_account="alice",
+    amount=wax.hbd.satoshis(10000),  # 10.000 HBD
+    memo="Savings deposit"
+)
+```
+
+---
+
+### transfer_from_savings
+
+Initiates withdrawal from savings (3-day delay).
+
+```python
+from wax.proto.operations import transfer_from_savings
+
+op = transfer_from_savings(
+    from_account="alice",
+    request_id=1,
+    to_account="alice",
+    amount=wax.hbd.satoshis(5000),
+    memo="Withdrawal"
+)
+```
+
+<ParamField path="request_id" type="int" required>
+  Unique ID for this withdrawal request.
+</ParamField>
+
+---
+
+### cancel_transfer_from_savings
+
+Cancels a pending savings withdrawal.
+
+```python
+from wax.proto.operations import cancel_transfer_from_savings
+
+op = cancel_transfer_from_savings(
+    from_account="alice",
+    request_id=1
+)
+```
+
+---
+
+## Voting operations
+
+### vote
+
+Votes on a post or comment.
+
+```python
+from wax.proto.operations import vote
+
+op = vote(
+    voter="alice",
+    author="bob",
+    permlink="my-awesome-post",
+    weight=10000  # 100% upvote
+)
+
+# Downvote
+op = vote(
+    voter="alice",
+    author="bob",
+    permlink="spam-post",
+    weight=-10000  # 100% downvote
+)
+
+# Remove vote
+op = vote(
+    voter="alice",
+    author="bob",
+    permlink="my-post",
+    weight=0
+)
+```
+
+<ParamField path="voter" type="str" required>
+  Voting account name.
+</ParamField>
+
+<ParamField path="author" type="str" required>
+  Post author account name.
+</ParamField>
+
+<ParamField path="permlink" type="str" required>
+  Post permlink.
+</ParamField>
+
+<ParamField path="weight" type="int" required>
+  Vote weight from -10000 (100% downvote) to 10000 (100% upvote). Use 0 to remove vote.
+</ParamField>
+
+---
+
+## Content operations
+
+### comment
+
+Creates a post or comment.
+
+```python
+from wax.proto.operations import comment
+
+# Create a post
+post = comment(
+    parent_author="",
+    parent_permlink="hive",  # Category/tag
+    author="alice",
+    permlink="my-first-post",
+    title="Hello Hive!",
+    body="This is my first post on Hive.",
+    json_metadata='{"tags":["hive","introduction"],"app":"my-app/1.0"}'
+)
+
+# Create a comment
+comment_op = comment(
+    parent_author="bob",
+    parent_permlink="bobs-post",
+    author="alice",
+    permlink="re-bobs-post-20240101t120000",
+    title="",
+    body="Great post!",
+    json_metadata="{}"
+)
+```
+
+<ParamField path="parent_author" type="str" required>
+  Parent post author (empty string for top-level posts).
+</ParamField>
+
+<ParamField path="parent_permlink" type="str" required>
+  Parent post permlink (category for top-level posts).
+</ParamField>
+
+<ParamField path="author" type="str" required>
+  Author account name.
+</ParamField>
+
+<ParamField path="permlink" type="str" required>
+  Post/comment permlink (must be unique for the author).
+</ParamField>
+
+<ParamField path="title" type="str" required>
+  Post title (empty for comments).
+</ParamField>
+
+<ParamField path="body" type="str" required>
+  Post/comment body content.
+</ParamField>
+
+<ParamField path="json_metadata" type="str" required>
+  JSON metadata string (tags, app info, etc.).
+</ParamField>
+
+---
+
+### delete_comment
+
+Deletes a post or comment (must have no replies).
+
+```python
+from wax.proto.operations import delete_comment
+
+op = delete_comment(
+    author="alice",
+    permlink="my-post"
+)
+```
+
+---
+
+### comment_options
+
+Sets advanced options for a post.
+
+```python
+from wax.proto.operations import comment_options
+
+op = comment_options(
+    author="alice",
+    permlink="my-post",
+    max_accepted_payout=wax.hbd.satoshis(100000),  # 100 HBD max
+    percent_hbd=10000,  # 100% HBD (vs HP)
+    allow_votes=True,
+    allow_curation_rewards=True,
+    extensions=[]
+)
+```
+
+---
+
+## Power operations
+
+### transfer_to_vesting
+
+Powers up HIVE to Hive Power.
+
+```python
+from wax.proto.operations import transfer_to_vesting
+
+op = transfer_to_vesting(
+    from_account="alice",
+    to_account="alice",
+    amount=wax.hive.satoshis(100000)  # 100 HIVE
+)
+
+# Power up to another account
+op = transfer_to_vesting(
+    from_account="alice",
+    to_account="bob",
+    amount=wax.hive.satoshis(50000)
+)
+```
+
+---
+
+### withdraw_vesting
+
+Starts power down process (13 weeks).
+
+```python
+from wax.proto.operations import withdraw_vesting
+
+# Start power down
+op = withdraw_vesting(
+    account="alice",
+    vesting_shares=wax.vests.satoshis(1000000000)  # Amount to power down
+)
+
+# Stop power down
+op = withdraw_vesting(
+    account="alice",
+    vesting_shares=wax.vests.satoshis(0)
+)
+```
+
+---
+
+### delegate_vesting_shares
+
+Delegates Hive Power to another account.
+
+```python
+from wax.proto.operations import delegate_vesting_shares
+
+# Delegate HP
+op = delegate_vesting_shares(
+    delegator="alice",
+    delegatee="bob",
+    vesting_shares=wax.vests.satoshis(100000000)
+)
+
+# Remove delegation
+op = delegate_vesting_shares(
+    delegator="alice",
+    delegatee="bob",
+    vesting_shares=wax.vests.satoshis(0)
+)
+```
+
+---
+
+### set_withdraw_vesting_route
+
+Sets destination for power down payments.
+
+```python
+from wax.proto.operations import set_withdraw_vesting_route
+
+op = set_withdraw_vesting_route(
+    from_account="alice",
+    to_account="bob",
+    percent=5000,  # 50% to bob
+    auto_vest=True  # Automatically power up
+)
+```
+
+---
+
+## Account operations
+
+### account_create
+
+Creates a new account.
+
+```python
+from wax.proto.operations import account_create
+from wax.proto.authority import authority
+
+op = account_create(
+    fee=wax.hive.satoshis(3000),
+    creator="alice",
+    new_account_name="bob",
+    owner=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM7...": 1}
+    ),
+    active=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM7...": 1}
+    ),
+    posting=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM7...": 1}
+    ),
+    memo_key="STM7...",
+    json_metadata="{}"
+)
+```
+
+---
+
+### account_update2
+
+Updates account authorities and settings.
+
+```python
+from wax.proto.operations import account_update2
+from wax.proto.authority import authority
+
+op = account_update2(
+    account="alice",
+    posting=authority(
+        weight_threshold=1,
+        account_auths={},
+        key_auths={"STM8...": 1}  # New posting key
+    ),
+    json_metadata="",
+    posting_json_metadata="{}",
+    extensions=[]
+)
+```
+
+---
+
+### claim_account
+
+Claims a discounted account creation (uses RC).
+
+```python
+from wax.proto.operations import claim_account
+
+op = claim_account(
+    creator="alice",
+    fee=wax.hive.satoshis(0),  # Free with RC
+    extensions=[]
+)
+```
+
+---
+
+### create_claimed_account
+
+Creates account using claimed ticket.
+
+```python
+from wax.proto.operations import create_claimed_account
+from wax.proto.authority import authority
+
+op = create_claimed_account(
+    creator="alice",
+    new_account_name="carol",
+    owner=authority(...),
+    active=authority(...),
+    posting=authority(...),
+    memo_key="STM7...",
+    json_metadata="{}",
+    extensions=[]
+)
+```
+
+---
+
+## Witness operations
+
+### account_witness_vote
+
+Votes for a witness.
+
+```python
+from wax.proto.operations import account_witness_vote
+
+# Vote for witness
+op = account_witness_vote(
+    account="alice",
+    witness="good-witness",
+    approve=True
+)
+
+# Remove witness vote
+op = account_witness_vote(
+    account="alice",
+    witness="good-witness",
+    approve=False
+)
+```
+
+---
+
+### account_witness_proxy
+
+Sets witness voting proxy.
+
+```python
+from wax.proto.operations import account_witness_proxy
+
+# Set proxy
+op = account_witness_proxy(
+    account="alice",
+    proxy="trusted-account"
+)
+
+# Remove proxy
+op = account_witness_proxy(
+    account="alice",
+    proxy=""  # Empty string removes proxy
+)
+```
+
+---
+
+## Proposal operations
+
+### create_proposal
+
+Creates a Decentralized Hive Fund proposal.
+
+```python
+from datetime import datetime, timedelta
+from wax.proto.operations import create_proposal
+
+op = create_proposal(
+    creator="alice",
+    receiver="alice",
+    start_date=datetime.now(),
+    end_date=datetime.now() + timedelta(days=30),
+    daily_pay=wax.hbd.satoshis(10000),  # 10 HBD/day
+    subject="My proposal",
+    permlink="my-proposal",
+    extensions=[]
+)
+```
+
+---
+
+### update_proposal_votes
+
+Votes on a DHF proposal.
+
+```python
+from wax.proto.operations import update_proposal_votes
+
+op = update_proposal_votes(
+    voter="alice",
+    proposal_ids=[1, 2, 3],  # Vote for proposals
+    approve=True,
+    extensions=[]
+)
+
+# Remove votes
+op = update_proposal_votes(
+    voter="alice",
+    proposal_ids=[1, 2],
+    approve=False,
+    extensions=[]
+)
+```
+
+---
+
+### remove_proposal
+
+Removes a proposal.
+
+```python
+from wax.proto.operations import remove_proposal
+
+op = remove_proposal(
+    proposal_owner="alice",
+    proposal_ids=[1],
+    extensions=[]
+)
+```
+
+---
+
+## Custom operations
+
+### custom_json
+
+Executes custom JSON operations (for apps and protocols).
+
+```python
+from wax.proto.operations import custom_json
+import json
+
+# Follow operation
+op = custom_json(
+    required_auths=[],
+    required_posting_auths=["alice"],
+    id="follow",
+    json=json.dumps([
+        "follow",
+        {
+            "follower": "alice",
+            "following": "bob",
+            "what": ["blog"]
+        }
+    ])
+)
+
+# Reblog operation
+op = custom_json(
+    required_auths=[],
+    required_posting_auths=["alice"],
+    id="reblog",
+    json=json.dumps([
+        "reblog",
+        {
+            "account": "alice",
+            "author": "bob",
+            "permlink": "great-post"
+        }
+    ])
+)
+```
+
+<ParamField path="required_auths" type="list[str]" default="[]">
+  Accounts requiring active authority.
+</ParamField>
+
+<ParamField path="required_posting_auths" type="list[str]" default="[]">
+  Accounts requiring posting authority.
+</ParamField>
+
+<ParamField path="id" type="str" required>
+  Custom operation ID (e.g., "follow", "reblog", "community").
+</ParamField>
+
+<ParamField path="json" type="str" required>
+  JSON string containing operation data.
+</ParamField>
+
+---
+
+## Market operations
+
+### limit_order_create
+
+Creates a limit order on the internal market.
+
+```python
+from wax.proto.operations import limit_order_create
+from datetime import datetime, timedelta
+
+op = limit_order_create(
+    owner="alice",
+    orderid=12345,
+    amount_to_sell=wax.hive.satoshis(100000),  # 100 HIVE
+    min_to_receive=wax.hbd.satoshis(50000),    # 50 HBD minimum
+    fill_or_kill=False,
+    expiration=datetime.now() + timedelta(days=7)
+)
+```
+
+---
+
+### limit_order_cancel
+
+Cancels a limit order.
+
+```python
+from wax.proto.operations import limit_order_cancel
+
+op = limit_order_cancel(
+    owner="alice",
+    orderid=12345
+)
+```
+
+---
+
+### convert
+
+Converts HBD to HIVE (3.5 day delay).
+
+```python
+from wax.proto.operations import convert
+
+op = convert(
+    owner="alice",
+    requestid=1,
+    amount=wax.hbd.satoshis(10000)  # 10 HBD
+)
+```
+
+---
+
+### collateralized_convert
+
+Converts HIVE to HBD with collateral.
+
+```python
+from wax.proto.operations import collateralized_convert
+
+op = collateralized_convert(
+    owner="alice",
+    requestid=1,
+    amount=wax.hive.satoshis(100000)  # 100 HIVE
+)
+```
+
+---
+
+## Rewards operations
+
+### claim_reward_balance
+
+Claims pending rewards.
+
+```python
+from wax.proto.operations import claim_reward_balance
+
+op = claim_reward_balance(
+    account="alice",
+    reward_hive=wax.hive.satoshis(1000),
+    reward_hbd=wax.hbd.satoshis(500),
+    reward_vests=wax.vests.satoshis(1000000)
+)
+```
+
+---
+
+## Complete example
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import (
+    transfer,
+    vote,
+    comment,
+    custom_json
+)
+import json
+
+async def main():
+    chain = create_hive_chain()
+    
+    try:
+        tx = await chain.create_transaction()
+        
+        # Create a post
+        tx.push_operation(
+            comment(
+                parent_author="",
+                parent_permlink="hive",
+                author="alice",
+                permlink="my-post",
+                title="Hello Hive",
+                body="My first post using Wax!",
+                json_metadata=json.dumps({
+                    "tags": ["hive", "wax"],
+                    "app": "my-app/1.0"
+                })
+            )
+        )
+        
+        # Vote on it
+        tx.push_operation(
+            vote(
+                voter="alice",
+                author="alice",
+                permlink="my-post",
+                weight=10000
+            )
+        )
+        
+        # Send a tip
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=chain.hive.satoshis(1000),
+                memo="Thanks for the help!"
+            )
+        )
+        
+        # Follow someone
+        tx.push_operation(
+            custom_json(
+                required_auths=[],
+                required_posting_auths=["alice"],
+                id="follow",
+                json=json.dumps([
+                    "follow",
+                    {
+                        "follower": "alice",
+                        "following": "bob",
+                        "what": ["blog"]
+                    }
+                ])
+            )
+        )
+        
+        # Sign and broadcast
+        # ... (signing code) ...
+        
+    finally:
+        chain.teardown()
+
+asyncio.run(main())
+```

@@ -1,80 +1,405 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get started with WAX in under 5 minutes"
 ---
 
-## Get started in three steps
+This quickstart guide will help you create your first Hive blockchain transaction using WAX. Choose your preferred language to get started.
 
-Get your documentation site running locally and make your first customization.
+<Tabs>
+  <Tab title="TypeScript">
+    ## Installation
 
-### Step 1: Set up your local environment
+    Install WAX using your preferred package manager:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @hiveio/wax
+    ```
+
+    ```bash yarn
+    yarn add @hiveio/wax
+    ```
+
+    ```bash pnpm
+    pnpm add @hiveio/wax
+    ```
+    </CodeGroup>
+
+    ## Create your first transaction
+
+    <Steps>
+      <Step title="Import and initialize WAX">
+        ```typescript
+        import { createWaxFoundation, createHiveChain } from '@hiveio/wax';
+
+        // For offline operations (transaction building)
+        const wax = await createWaxFoundation();
+
+        // For online operations (broadcasting, API calls)
+        const chain = await createHiveChain();
+        ```
+      </Step>
+
+      <Step title="Build a transaction">
+        Create a transaction and add operations. This example creates a vote operation:
+
+        ```typescript
+        // Create a transaction
+        const tx = await wax.createTransaction();
+
+        // Add a vote operation
+        tx.pushOperation({
+          vote: {
+            voter: "alice",
+            author: "bob",
+            permlink: "example-post",
+            weight: 10000  // 100% vote (10000 = 100%)
+          }
+        });
+        ```
+
+        <Note>
+          The `weight` field accepts values from -10000 (100% downvote) to 10000 (100% upvote).
+        </Note>
+      </Step>
+
+      <Step title="Sign the transaction">
+        Sign the transaction with your wallet or signing provider:
+
+        ```typescript
+        // Sign with Beekeeper (recommended for development)
+        import { createBeekeeperSession } from '@hiveio/signers-beekeeper';
+
+        const session = await createBeekeeperSession();
+        const wallet = await session.createWallet("my-wallet");
+        const publicKey = await wallet.importKey("5JYourPrivateKeyHere...");
+
+        await tx.sign(wallet, publicKey);
+        ```
+
+        <Warning>
+          Never hard-code private keys in production. Use environment variables or secure key management.
+        </Warning>
+      </Step>
+
+      <Step title="Broadcast to the network">
+        Send your signed transaction to the Hive blockchain:
+
+        ```typescript
+        // Broadcast the transaction
+        const result = await chain.broadcast(tx.transaction);
+
+        console.log('Transaction broadcasted!');
+        console.log('Transaction ID:', result.id);
+        console.log('Block number:', result.block_num);
+        ```
+      </Step>
+    </Steps>
+
+    ## Next steps
+
+    <CardGroup cols={2}>
+      <Card
+        title="TypeScript SDK Guide"
+        icon="code"
+        href="/typescript/overview"
+      >
+        Learn more about the TypeScript SDK
+      </Card>
+      <Card
+        title="Transaction Building"
+        icon="hammer"
+        href="/guides/building-transactions"
+      >
+        Deep dive into transaction building
+      </Card>
+      <Card
+        title="Signing Options"
+        icon="key"
+        href="/guides/signing-transactions"
+      >
+        Explore different signing providers
+      </Card>
+      <Card
+        title="API Reference"
+        icon="book"
+        href="/api/typescript/wax-factory"
+      >
+        Browse the complete API reference
+      </Card>
+    </CardGroup>
+  </Tab>
+
+  <Tab title="Python">
+    ## Installation
+
+    Install WAX using pip:
+
+    ```bash
+    pip install hiveio-wax
+    ```
+
+    <Note>
+      WAX requires Python 3.12 or higher.
+    </Note>
+
+    ## Create your first transaction
+
+    <Steps>
+      <Step title="Import and initialize WAX">
+        ```python
+        from wax import create_wax_foundation, create_hive_chain
+
+        # For offline operations (transaction building)
+        wax = create_wax_foundation()
+
+        # For online operations (broadcasting, API calls)
+        chain = create_hive_chain()
+        ```
+      </Step>
+
+      <Step title="Build a transaction">
+        Create a transaction and add operations. This example creates a vote operation:
+
+        ```python
+        from wax.proto.operations import vote_operation
+
+        # Create a transaction
+        tx = wax.create_transaction()
+
+        # Add a vote operation
+        tx.push_operation(
+            vote_operation(
+                voter="alice",
+                author="bob",
+                permlink="example-post",
+                weight=10000  # 100% vote
+            )
+        )
+        ```
+
+        <Note>
+          The `weight` field accepts values from -10000 (100% downvote) to 10000 (100% upvote).
+        </Note>
+      </Step>
+
+      <Step title="Sign the transaction">
+        Sign the transaction with Beekeeper wallet:
+
+        ```python
+        from beekeepy import create_wallet
+
+        # Create a Beekeeper wallet session
+        async with create_wallet() as wallet:
+            # Import your key
+            public_key = await wallet.import_key("5JYourPrivateKeyHere...")
+            
+            # Sign the transaction
+            await tx.sign(wallet, public_key)
+        ```
+
+        <Warning>
+          Never hard-code private keys in production. Use environment variables or secure key management.
+        </Warning>
+      </Step>
+
+      <Step title="Broadcast to the network">
+        Send your signed transaction to the Hive blockchain:
+
+        ```python
+        # Broadcast the transaction
+        result = await chain.broadcast(tx.transaction)
+
+        print(f"Transaction broadcasted!")
+        print(f"Transaction ID: {result.id}")
+        print(f"Block number: {result.block_num}")
+        ```
+      </Step>
+    </Steps>
+
+    ## Next steps
+
+    <CardGroup cols={2}>
+      <Card
+        title="Python SDK Guide"
+        icon="python"
+        href="/python/overview"
+      >
+        Learn more about the Python SDK
+      </Card>
+      <Card
+        title="Transaction Building"
+        icon="hammer"
+        href="/guides/building-transactions"
+      >
+        Deep dive into transaction building
+      </Card>
+      <Card
+        title="Signing Options"
+        icon="key"
+        href="/guides/signing-transactions"
+      >
+        Explore different signing providers
+      </Card>
+      <Card
+        title="API Reference"
+        icon="book"
+        href="/api/python/wax-factory"
+      >
+        Browse the complete API reference
+      </Card>
+    </CardGroup>
+  </Tab>
+</Tabs>
+
+## Common operations
+
+Here are some other common operations you might want to try:
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  <Accordion title="Transfer tokens">
+    Transfer HIVE, HBD, or HIVE POWER between accounts:
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        tx.pushOperation({
+          transfer: {
+            from_account: "alice",
+            to_account: "bob",
+            amount: wax.hiveCoins(10),  // 10 HIVE
+            memo: "Thanks for your help!"
+          }
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from wax.proto.operations import transfer_operation
+
+        tx.push_operation(
+            transfer_operation(
+                from_account="alice",
+                to_account="bob",
+                amount=wax.hive(10),  # 10 HIVE
+                memo="Thanks for your help!"
+            )
+        )
+        ```
+      </Tab>
+    </Tabs>
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+
+  <Accordion title="Create a blog post">
+    Publish content to the Hive blockchain:
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        tx.pushOperation({
+          comment: {
+            parent_author: "",
+            parent_permlink: "blockchain",
+            author: "alice",
+            permlink: "my-first-post",
+            title: "My First Post on Hive",
+            body: "This is the content of my post...",
+            json_metadata: JSON.stringify({
+              tags: ["blockchain", "hive"],
+              app: "my-app/1.0.0"
+            })
+          }
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from wax.proto.operations import comment_operation
+        import json
+
+        tx.push_operation(
+            comment_operation(
+                parent_author="",
+                parent_permlink="blockchain",
+                author="alice",
+                permlink="my-first-post",
+                title="My First Post on Hive",
+                body="This is the content of my post...",
+                json_metadata=json.dumps({
+                    "tags": ["blockchain", "hive"],
+                    "app": "my-app/1.0.0"
+                })
+            )
+        )
+        ```
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="Follow another user">
+    Use custom_json to follow another account:
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        tx.pushOperation({
+          custom_json: {
+            required_auths: [],
+            required_posting_auths: ["alice"],
+            id: "follow",
+            json: JSON.stringify([
+              "follow",
+              {
+                follower: "alice",
+                following: "bob",
+                what: ["blog"]
+              }
+            ])
+          }
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from wax.proto.operations import custom_json_operation
+        import json
+
+        tx.push_operation(
+            custom_json_operation(
+                required_auths=[],
+                required_posting_auths=["alice"],
+                id="follow",
+                json=json.dumps([
+                    "follow",
+                    {
+                        "follower": "alice",
+                        "following": "bob",
+                        "what": ["blog"]
+                    }
+                ])
+            )
+        )
+        ```
+      </Tab>
+    </Tabs>
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+## Get help
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card
+    title="Core Concepts"
+    icon="lightbulb"
+    href="/concepts/architecture"
+  >
+    Understand how WAX works under the hood
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/typescript/examples"
+  >
+    Browse complete working examples
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,254 @@
+---
+title: Installation
+description: Install and configure the WAX Python SDK
+---
+
+The WAX Python SDK is distributed as `hiveio-wax` on PyPI. It provides native performance through Cython bindings to the C++ Hive protocol implementation.
+
+## Requirements
+
+Before installing, ensure you have:
+
+- **Python 3.12 or higher** - The SDK requires modern Python features
+- **pip** - Python package installer (included with Python)
+- **Operating system** - Linux, macOS, or Windows with WSL
+
+<Note>
+The SDK includes compiled native extensions. Pre-built wheels are available for common platforms. If a wheel isn't available for your platform, pip will attempt to build from source (requires a C++ compiler).
+</Note>
+
+## Install from PyPI
+
+Install the latest stable version:
+
+```bash
+pip install hiveio-wax
+```
+
+Install a specific version:
+
+```bash
+pip install hiveio-wax==1.2.3
+```
+
+## Install with Beekeeper
+
+For transaction signing with wallet integration, also install the Beekeeper Python client:
+
+```bash
+pip install hiveio-wax beekeepy
+```
+
+This enables secure key management through the Beekeeper wallet system.
+
+## Verify installation
+
+Confirm the SDK is installed correctly:
+
+```python
+import wax
+
+print(f"WAX version: {wax.__version__}")
+
+# Test basic functionality
+foundation = wax.create_wax_foundation()
+print(f"Chain ID: {foundation.chain_id}")
+print(f"Address prefix: {foundation.address_prefix}")
+```
+
+Expected output:
+
+```
+WAX version: 1.2.3
+Chain ID: beeab0de00000000000000000000000000000000000000000000000000000000
+Address prefix: STM
+```
+
+## Development installation
+
+For contributing or testing unreleased features, install from source:
+
+### Clone the repository
+
+```bash
+git clone https://gitlab.syncad.com/hive/wax.git
+cd wax
+git submodule update --init --recursive
+```
+
+### Install Poetry
+
+The project uses Poetry for dependency management:
+
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+### Build and install
+
+From the repository root:
+
+```bash
+./python/wax/scripts/install_wax.sh
+```
+
+This script:
+1. Sets up a Python virtual environment
+2. Installs build dependencies
+3. Compiles the Cython extensions
+4. Installs the package in development mode
+
+### Run tests
+
+```bash
+./python/tests/wax/run_tests.sh
+```
+
+## Configuration
+
+The SDK supports configuration through options objects.
+
+### Offline mode (wax foundation)
+
+```python
+from wax import create_wax_foundation, WaxOptions
+
+# Default configuration (mainnet)
+wax = create_wax_foundation()
+
+# Custom chain ID (e.g., testnet)
+options = WaxOptions(
+    chain_id="18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e"
+)
+wax = create_wax_foundation(options)
+```
+
+### Online mode (hive chain)
+
+```python
+from wax import create_hive_chain, WaxChainOptions
+
+# Default configuration (mainnet via hive.blog)
+wax = create_hive_chain()
+
+# Custom endpoint
+options = WaxChainOptions(
+    endpoint_url="https://api.deathwing.me"
+)
+wax = create_hive_chain(options)
+
+# Custom chain and endpoint (e.g., testnet)
+options = WaxChainOptions(
+    chain_id="18dcf0a285365fc58b71f18b3d3fec954aa0c141c44e4e5cb4cf777b9eab274e",
+    endpoint_url="https://testnet.openhive.network"
+)
+wax = create_hive_chain(options)
+```
+
+## Virtual environments
+
+It's recommended to use virtual environments for project isolation.
+
+### Using venv
+
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate (Linux/macOS)
+source .venv/bin/activate
+
+# Activate (Windows)
+.venv\Scripts\activate
+
+# Install SDK
+pip install hiveio-wax
+```
+
+### Using Poetry
+
+```bash
+# Create project
+poetry new my-hive-app
+cd my-hive-app
+
+# Add dependency
+poetry add hiveio-wax
+
+# Activate virtual environment
+poetry shell
+```
+
+## Dependencies
+
+The SDK automatically installs required dependencies:
+
+- **protobuf** - Protocol Buffer message handling
+- **httpx** - Async HTTP client for API calls (with HTTP/2 support)
+- **python-dateutil** - Date/time parsing and manipulation
+- **typing-extensions** - Extended type hints
+- **hiveio-api** - Generated API client definitions
+
+### Optional dependencies
+
+- **beekeepy** - Beekeeper wallet integration for transaction signing
+- **pytest** - For running tests
+- **mypy** - For type checking
+- **ruff** - For linting
+
+## Troubleshooting
+
+### Import errors
+
+If you encounter import errors:
+
+```python
+ImportError: cannot import name 'create_hive_chain' from 'wax'
+```
+
+Ensure you're importing from the correct package:
+
+```python
+# Correct
+from wax import create_hive_chain
+
+# Incorrect - different package
+from wax_chain import create_hive_chain
+```
+
+### Build failures
+
+If building from source fails:
+
+1. Ensure you have a C++ compiler:
+   - Linux: `sudo apt-get install build-essential`
+   - macOS: Install Xcode Command Line Tools
+   - Windows: Use WSL or install Visual Studio Build Tools
+
+2. Ensure submodules are initialized:
+   ```bash
+   git submodule update --init --recursive
+   ```
+
+### Version conflicts
+
+If you experience dependency version conflicts:
+
+```bash
+# Clear pip cache
+pip cache purge
+
+# Reinstall
+pip install --no-cache-dir --force-reinstall hiveio-wax
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Offline operations" icon="plug" href="/python/wax-foundation">
+    Learn about create_wax_foundation for offline mode
+  </Card>
+  <Card title="Online operations" icon="globe" href="/python/hive-chain">
+    Learn about create_hive_chain for full blockchain access
+  </Card>
+</CardGroup>

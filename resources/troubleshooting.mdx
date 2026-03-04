@@ -1,0 +1,545 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for WAX SDK
+---
+
+Find solutions to common problems when working with WAX.
+
+## Installation issues
+
+<AccordionGroup>
+  <Accordion title="Python version mismatch">
+    **Problem**: WAX requires Python 3.12 or higher, but you have an older version.
+    
+    **Solution**: Upgrade Python:
+    
+    ```bash
+    # Check current version
+    python3 --version
+    
+    # Ubuntu/Debian
+    sudo apt update
+    sudo apt install python3.12
+    
+    # macOS
+    brew install python@3.12
+    ```
+    
+    Then create a new virtual environment:
+    
+    ```bash
+    python3.12 -m venv venv
+    source venv/bin/activate
+    pip install hiveio-wax
+    ```
+  </Accordion>
+  
+  <Accordion title="Poetry not found">
+    **Problem**: `poetry` command not found.
+    
+    **Solution**: Install Poetry and add to PATH:
+    
+    ```bash
+    # Install Poetry 2.1.3
+    curl -sSL https://install.python-poetry.org | python3 - --version 2.1.3
+    
+    # Add to PATH (add to ~/.bashrc or ~/.zshrc)
+    export PATH="$HOME/.local/bin:$PATH"
+    
+    # Verify installation
+    poetry --version
+    ```
+  </Accordion>
+  
+  <Accordion title="Protobuf compiler not found">
+    **Problem**: Build fails with "protoc not found" or similar error.
+    
+    **Solution**: Install the protobuf compiler:
+    
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install protobuf-compiler
+    
+    # macOS
+    brew install protobuf
+    
+    # Verify installation
+    protoc --version
+    ```
+  </Accordion>
+  
+  <Accordion title="Wheel not compatible">
+    **Problem**: `ERROR: hiveio_wax-*.whl is not a supported wheel on this platform.`
+    
+    **Solution**: The wheel doesn't match your Python version or platform. Check:
+    
+    ```bash
+    # Check your Python version and platform
+    python3 -c "import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}'); print(f'Platform: {sys.platform}')"
+    
+    # Install the correct wheel or build from source
+    export PYTHON_VERSION=3.12
+    ./python/wax/scripts/build_wax.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="pnpm command not found">
+    **Problem**: `pnpm` is not installed for TypeScript development.
+    
+    **Solution**: Install pnpm:
+    
+    ```bash
+    # Using npm
+    npm install -g pnpm
+    
+    # Using standalone script
+    curl -fsSL https://get.pnpm.io/install.sh | sh -
+    
+    # Verify installation
+    pnpm --version
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Build issues
+
+<AccordionGroup>
+  <Accordion title="Missing Boost libraries">
+    **Problem**: Build fails with missing Boost library errors.
+    
+    **Solution**: Use the official CI base image which includes pre-compiled Boost:
+    
+    ```bash
+    # Pull the CI base image
+    docker pull registry.gitlab.syncad.com/hive/wax/ci-base-image:pypa_2_28-13
+    
+    # Or build inside the image
+    docker run --rm -v "${PWD}:${PWD}" -w "${PWD}" \
+      registry.gitlab.syncad.com/hive/wax/ci-base-image:pypa_2_28-13 \
+      bash -c "./python/wax/scripts/build_wax.sh 1"
+    ```
+  </Accordion>
+  
+  <Accordion title="Submodule not initialized">
+    **Problem**: Build fails because the `hive` submodule is not initialized.
+    
+    **Solution**: Initialize and update submodules:
+    
+    ```bash
+    git submodule update --init --recursive
+    
+    # Verify submodule is initialized
+    ls hive/libraries/protocol/proto/
+    ```
+  </Accordion>
+  
+  <Accordion title="WASM build fails">
+    **Problem**: TypeScript WASM build fails with compilation errors.
+    
+    **Solution**: Ensure all dependencies are installed and submodules are initialized:
+    
+    ```bash
+    # Check submodules
+    git submodule update --init --recursive
+    
+    # Clean and rebuild
+    cd ts
+    rm -rf node_modules dist build_wasm
+    pnpm install
+    pnpm run build
+    
+    # Check build logs
+    cat wasm/build_wasm/*.log
+    ```
+  </Accordion>
+  
+  <Accordion title="Out of memory during build">
+    **Problem**: Build process crashes with out of memory errors.
+    
+    **Solution**: Increase available memory or reduce parallel jobs:
+    
+    ```bash
+    # Reduce pytest parallel jobs
+    poetry run pytest -n 2  # Instead of -n auto
+    
+    # For Docker builds, increase memory limit
+    docker run --memory=8g ...
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Runtime issues
+
+<AccordionGroup>
+  <Accordion title="Import error: cannot import name">
+    **Problem**: `ImportError: cannot import name 'create_wax_foundation' from 'wax'`
+    
+    **Solution**: Ensure WAX is properly installed:
+    
+    ```bash
+    # Verify installation
+    python3 -c "import wax; print(wax.__version__)"
+    
+    # Reinstall if needed
+    pip uninstall hiveio-wax
+    pip install hiveio-wax
+    
+    # Or install from wheel
+    pip install --force-reinstall ./dist/hiveio_wax-*.whl
+    ```
+  </Accordion>
+  
+  <Accordion title="Module not found: @hiveio/wax">
+    **Problem**: TypeScript cannot find the WAX module.
+    
+    **Solution**: Ensure the package is installed:
+    
+    ```bash
+    # Verify installation
+    npm list @hiveio/wax
+    
+    # Install if missing
+    npm install @hiveio/wax
+    
+    # Or install from tarball
+    npm install ./ts/wasm/dist/*.tgz
+    ```
+  </Accordion>
+  
+  <Accordion title="Protobuf deserialization errors">
+    **Problem**: Errors when deserializing protocol buffer messages.
+    
+    **Solution**: Ensure protobuf versions match:
+    
+    ```bash
+    # Python: Check protobuf version
+    pip show protobuf
+    
+    # Should be ^6.33.0 - upgrade if needed
+    pip install --upgrade 'protobuf>=6.33.0,<7'
+    
+    # Regenerate proto files
+    ./python/wax/scripts/compile_proto.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="API connection failures">
+    **Problem**: Cannot connect to Hive API nodes.
+    
+    **Solution**: Check your endpoint and network:
+    
+    ```python
+    # Python
+    from wax import create_hive_chain
+    
+    # Try different endpoints
+    endpoints = [
+        "https://api.hive.blog",
+        "https://api.deathwing.me",
+        "https://api.openhive.network"
+    ]
+    
+    for endpoint in endpoints:
+        try:
+            chain = create_hive_chain(endpoint)
+            info = chain.api.get_dynamic_global_properties()
+            print(f"Connected to {endpoint}")
+            break
+        except Exception as e:
+            print(f"Failed to connect to {endpoint}: {e}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Transaction signing failures">
+    **Problem**: Transactions fail to sign or broadcast.
+    
+    **Solution**: Verify your signing setup:
+    
+    ```python
+    # Python example
+    from wax import create_wax_foundation
+    
+    # Create foundation
+    wax = create_wax_foundation()
+    
+    # Verify transaction structure
+    tx = wax.create_transaction()
+    tx.push_operation({...})
+    
+    # Check transaction before signing
+    print(tx.json)
+    
+    # Ensure signer is properly configured
+    # For beekeeper: check wallet is unlocked
+    # For keychain: check browser extension is installed
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing issues
+
+<AccordionGroup>
+  <Accordion title="Mock server won't start">
+    **Problem**: Tests fail because mock server cannot start.
+    
+    **Solution**: Check if port is already in use:
+    
+    ```bash
+    # Check if port 4000 is in use
+    lsof -i :4000
+    
+    # Kill existing process
+    kill -9 <PID>
+    
+    # Or use a different port
+    export MOCK_SERVER_PORT=4001
+    ./python/tests/wax/run_tests.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Playwright browsers not installed">
+    **Problem**: TypeScript tests fail with "Browser not found" error.
+    
+    **Solution**: Install Playwright browsers:
+    
+    ```bash
+    cd ts
+    pnpm exec playwright install
+    
+    # Or install specific browser
+    pnpm exec playwright install chromium
+    ```
+  </Accordion>
+  
+  <Accordion title="Import errors in tests">
+    **Problem**: Tests fail with import errors.
+    
+    **Solution**: Set PYTHONPATH correctly:
+    
+    ```bash
+    # Set PYTHONPATH to include python directory
+    export PYTHONPATH="${PWD}/python:${PYTHONPATH}"
+    
+    # Or use the test script which sets it automatically
+    ./python/tests/wax/run_tests.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Tests timeout">
+    **Problem**: Tests hang or timeout.
+    
+    **Solution**: Increase timeout or debug hanging tests:
+    
+    ```bash
+    # Increase mock server timeout
+    export TIMEOUT_PROXY_MOCK_SERVER_SECONDS=60
+    ./python/tests/wax/run_tests.sh
+    
+    # Run tests with verbose output
+    poetry run pytest -vvv --log-cli-level=DEBUG
+    
+    # Run single test to isolate issue
+    poetry run pytest -vvv path/to/test_file.py::test_function
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Development issues
+
+<AccordionGroup>
+  <Accordion title="Linter errors">
+    **Problem**: Linter fails with style violations.
+    
+    **Solution**: Auto-fix issues where possible:
+    
+    ```bash
+    # Python: Auto-fix with Ruff
+    poetry run ruff check --fix .
+    
+    # TypeScript: Auto-fix with ESLint
+    cd ts
+    pnpm run lint --fix
+    ```
+  </Accordion>
+  
+  <Accordion title="Type checking errors">
+    **Problem**: MyPy or TypeScript type checking fails.
+    
+    **Solution**: Review type errors and fix:
+    
+    ```bash
+    # Python: Run MyPy with detailed output
+    poetry run mypy . --show-error-codes --pretty
+    
+    # TypeScript: Run tsc with detailed output
+    cd ts
+    npx tsc --noEmit --pretty
+    ```
+  </Accordion>
+  
+  <Accordion title="Git hooks fail">
+    **Problem**: Pre-commit hooks fail on commit.
+    
+    **Solution**: Run pre-commit manually and fix issues:
+    
+    ```bash
+    # Install pre-commit hooks
+    pre-commit install
+    
+    # Run all hooks
+    pre-commit run --all-files
+    
+    # Skip hooks temporarily (not recommended)
+    git commit --no-verify
+    ```
+  </Accordion>
+  
+  <Accordion title="CI pipeline failures">
+    **Problem**: GitLab CI pipeline fails.
+    
+    **Solution**: Check pipeline logs and run locally:
+    
+    ```bash
+    # Run tests locally before pushing
+    ./python/tests/wax/run_tests.sh
+    cd ts && pnpm run test
+    
+    # Check linters
+    poetry run ruff check .
+    poetry run mypy .
+    cd ts && pnpm run lint
+    
+    # Check pipeline configuration
+    gitlab-ci-local --list
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance issues
+
+<AccordionGroup>
+  <Accordion title="Slow imports">
+    **Problem**: Importing WAX takes a long time.
+    
+    **Solution**: This is expected for first import as native modules are loaded. Subsequent imports are cached:
+    
+    ```python
+    # Python: Import at module level, not in functions
+    import wax
+    
+    # Not recommended - imports inside loop
+    def process_items(items):
+        for item in items:
+            from wax import create_wax_foundation  # Slow!
+            ...
+    
+    # Recommended - import once
+    from wax import create_wax_foundation
+    
+    def process_items(items):
+        wax = create_wax_foundation()
+        for item in items:
+            ...
+    ```
+  </Accordion>
+  
+  <Accordion title="Large memory usage">
+    **Problem**: WAX uses more memory than expected.
+    
+    **Solution**: Optimize memory usage:
+    
+    ```python
+    # Python: Use context managers
+    from wax import create_hive_chain
+    
+    # Release resources when done
+    def process_transactions():
+        chain = create_hive_chain("https://api.hive.blog")
+        # ... process transactions ...
+        del chain  # Explicit cleanup
+    
+    # TypeScript: Use memory profiling
+    // See examples/ts/memory-used/ for profiling tools
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow transaction building">
+    **Problem**: Building transactions is slow.
+    
+    **Solution**: Batch operations and reuse objects:
+    
+    ```python
+    # Slow - creating new foundation each time
+    for op in operations:
+        wax = create_wax_foundation()
+        tx = wax.create_transaction()
+        tx.push_operation(op)
+    
+    # Fast - reuse foundation
+    wax = create_wax_foundation()
+    for op in operations:
+        tx = wax.create_transaction()
+        tx.push_operation(op)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Getting help
+
+If you can't find a solution to your problem:
+
+<CardGroup cols={2}>
+  <Card title="GitLab issues" icon="gitlab" href="https://gitlab.syncad.com/hive/wax/-/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Discussions" icon="comments" href="https://gitlab.syncad.com/hive/wax/-/discussions">
+    Ask questions and get help
+  </Card>
+  <Card title="Stack Overflow" icon="stack-overflow" href="https://stackoverflow.com/questions/tagged/hive-wax">
+    Search existing questions
+  </Card>
+  <Card title="Documentation" icon="book" href="/">
+    Browse the full documentation
+  </Card>
+</CardGroup>
+
+## Reporting bugs
+
+When reporting a bug, include:
+
+1. **Version information**:
+   ```bash
+   # Python
+   python3 --version
+   pip show hiveio-wax
+   
+   # TypeScript
+   node --version
+   npm list @hiveio/wax
+   ```
+
+2. **Environment details**:
+   - Operating system and version
+   - Python/Node.js version
+   - Installation method (pip, npm, from source)
+
+3. **Minimal reproduction**:
+   - Simplest code that reproduces the issue
+   - Steps to reproduce
+   - Expected vs actual behavior
+
+4. **Error messages**:
+   - Full error traceback
+   - Relevant log output
+   - Console errors (for browser issues)
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Contributing" icon="code-pull-request" href="/resources/contributing">
+    Help improve WAX
+  </Card>
+  <Card title="Building from source" icon="hammer" href="/resources/building">
+    Build WAX locally
+  </Card>
+</CardGroup>

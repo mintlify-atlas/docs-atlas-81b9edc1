@@ -1,0 +1,315 @@
+---
+title: "PeakVault signer"
+description: "Integrate PeakVault browser extension for transaction signing"
+---
+
+The PeakVault signer enables integration with PeakVault, a secure browser extension wallet from the PeakD team. This allows users to sign transactions using their PeakVault setup.
+
+## Overview
+
+PeakVault is a browser extension wallet designed specifically for the Hive blockchain by the team behind PeakD, one of Hive's most popular front-ends. It provides a secure and user-friendly way to manage Hive accounts and sign transactions.
+
+## Prerequisites
+
+Your users must have:
+
+- [PeakVault browser extension](https://vault.peakd.com/peakvault/releases.html) installed
+- At least one Hive account imported with the appropriate keys
+
+## Installation
+
+Install the PeakVault signer package:
+
+```bash
+npm install @hiveio/wax-signers-peakvault
+```
+
+## Basic usage
+
+Here's how to use the PeakVault signer with WAX:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import PeakVaultProvider from "@hiveio/wax-signers-peakvault";
+
+const chain = await createHiveChain();
+
+// Create the PeakVault provider
+const provider = PeakVaultProvider.for("myaccount", "active");
+
+// Create transaction
+const tx = await chain.createTransaction();
+tx.pushOperation({
+  vote: {
+    voter: "myaccount",
+    author: "author",
+    permlink: "post-permlink",
+    weight: 10000
+  }
+});
+
+// Sign with PeakVault (opens PeakVault popup)
+await provider.signTransaction(tx);
+
+// Broadcast the transaction
+await chain.broadcast(tx);
+```
+
+## Key authorities
+
+Specify which key authority to use when creating the provider:
+
+```typescript
+// Use posting key (for social operations)
+const postingProvider = PeakVaultProvider.for("username", "posting");
+
+// Use active key (for transfers and power operations)
+const activeProvider = PeakVaultProvider.for("username", "active");
+
+// Use owner key (for account management - use cautiously)
+const ownerProvider = PeakVaultProvider.for("username", "owner");
+```
+
+<Warning>
+Always use the minimum required key authority:
+- **Posting**: For votes, comments, posts, and follows
+- **Active**: For transfers, power ups, and conversions
+- **Owner**: Only for critical account changes
+</Warning>
+
+## Detecting PeakVault
+
+Check if PeakVault is available before using it:
+
+```typescript
+function isPeakVaultInstalled(): boolean {
+  return typeof window !== 'undefined' && 
+         window.peakvault !== undefined;
+}
+
+if (!isPeakVaultInstalled()) {
+  console.error("Please install PeakVault extension");
+  // Show installation instructions to user
+}
+```
+
+## User experience
+
+When you call `signTransaction()`, PeakVault will:
+
+1. Open a popup showing the transaction details
+2. Display all operations in a readable format
+3. Request user confirmation
+4. Sign with the appropriate key
+5. Return the signed transaction
+
+<Tip>
+PeakVault's interface is designed to be intuitive for Hive users, with clear transaction previews.
+</Tip>
+
+## Example: Post a comment
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import PeakVaultProvider from "@hiveio/wax-signers-peakvault";
+
+async function postComment(
+  author: string,
+  parentAuthor: string,
+  parentPermlink: string,
+  body: string
+) {
+  const chain = await createHiveChain();
+  const provider = PeakVaultProvider.for(author, "posting");
+  
+  const permlink = `re-${parentPermlink}-${Date.now()}`;
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    comment: {
+      parent_author: parentAuthor,
+      parent_permlink: parentPermlink,
+      author,
+      permlink,
+      title: "",
+      body,
+      json_metadata: JSON.stringify({
+        app: "my-app/1.0.0"
+      })
+    }
+  });
+  
+  // PeakVault popup appears for confirmation
+  await provider.signTransaction(tx);
+  
+  const result = await chain.broadcast(tx);
+  return { permlink, transactionId: result.id };
+}
+
+// Usage
+await postComment(
+  "alice",
+  "bob",
+  "original-post",
+  "Great post! Thanks for sharing."
+);
+```
+
+## Example: Claim rewards
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import PeakVaultProvider from "@hiveio/wax-signers-peakvault";
+
+async function claimRewards(account: string) {
+  const chain = await createHiveChain();
+  const provider = PeakVaultProvider.for(account, "posting");
+  
+  // Get pending rewards from API
+  const accountInfo = await chain.api.database_api.find_accounts({
+    accounts: [account]
+  });
+  
+  const rewards = accountInfo.accounts[0];
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    claim_reward_balance: {
+      account,
+      reward_hive: rewards.reward_hive_balance,
+      reward_hbd: rewards.reward_hbd_balance,
+      reward_vests: rewards.reward_vesting_balance
+    }
+  });
+  
+  await provider.signTransaction(tx);
+  const result = await chain.broadcast(tx);
+  
+  console.log("Rewards claimed!", result.id);
+}
+
+// Claim rewards for user
+await claimRewards("alice");
+```
+
+## Example: Delegate HIVE Power
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import PeakVaultProvider from "@hiveio/wax-signers-peakvault";
+
+async function delegatePower(
+  delegator: string,
+  delegatee: string,
+  vests: string
+) {
+  const chain = await createHiveChain();
+  const provider = PeakVaultProvider.for(delegator, "active");
+  
+  const tx = await chain.createTransaction();
+  tx.pushOperation({
+    delegate_vesting_shares: {
+      delegator,
+      delegatee,
+      vesting_shares: chain.vestsAsset(vests)
+    }
+  });
+  
+  await provider.signTransaction(tx);
+  return await chain.broadcast(tx);
+}
+
+// Delegate 1000 VESTS
+await delegatePower("alice", "bob", "1000.000000");
+```
+
+## Error handling
+
+```typescript
+try {
+  await provider.signTransaction(tx);
+  await chain.broadcast(tx);
+} catch (error) {
+  if (error.message.includes("user_cancel")) {
+    console.log("User cancelled the transaction");
+  } else if (error.message.includes("account_not_found")) {
+    console.log("Account not found in PeakVault");
+  } else if (error.message.includes("key_not_found")) {
+    console.log("Required key not available in PeakVault");
+  } else {
+    console.error("Transaction failed:", error);
+  }
+}
+```
+
+## Key features
+
+<CardGroup cols={2}>
+
+<Card title="Secure storage" icon="lock">
+  Keys are encrypted and stored securely in the browser.
+</Card>
+
+<Card title="PeakD integration" icon="mountain">
+  Seamless integration with the PeakD ecosystem.
+</Card>
+
+<Card title="Multi-account" icon="users">
+  Support for multiple Hive accounts.
+</Card>
+
+<Card title="Transaction preview" icon="eye">
+  Clear display of transaction details before signing.
+</Card>
+
+</CardGroup>
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Check extension availability">
+Always verify PeakVault is installed before attempting to use it:
+
+```typescript
+if (!isPeakVaultInstalled()) {
+  // Redirect to installation page or show alternative options
+}
+```
+</Accordion>
+
+<Accordion title="Use appropriate key authorities">
+Request the lowest-privilege key that can perform the operation. Don't ask for active keys when posting keys are sufficient.
+</Accordion>
+
+<Accordion title="Handle user cancellation gracefully">
+Users may cancel the signing request. Handle this case without showing errors:
+
+```typescript
+try {
+  await provider.signTransaction(tx);
+} catch (error) {
+  if (error.message.includes("user_cancel")) {
+    // User chose not to sign - this is normal
+    return null;
+  }
+  throw error;
+}
+```
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Operations" icon="gears" href="/concepts/operations">
+  Learn about available Hive operations.
+</Card>
+
+<Card title="Broadcasting" icon="broadcast-tower" href="/guides/broadcasting">
+  Understand transaction broadcasting.
+</Card>
+
+</CardGroup>

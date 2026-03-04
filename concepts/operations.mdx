@@ -1,0 +1,734 @@
+---
+title: Operations and protocol buffers
+description: Understanding operations, protocol buffer definitions, and how to use them in transactions
+---
+
+## What are operations
+
+Operations are the fundamental building blocks of Hive blockchain transactions. Each operation represents a specific action you want to perform on the blockchain, such as transferring funds, voting on content, or updating account settings.
+
+<Info>
+  Think of operations as instructions that modify the blockchain state. When bundled into a transaction and broadcast, they execute atomically.
+</Info>
+
+## Protocol buffers
+
+WAX uses Protocol Buffers (protobuf) as the canonical format for representing operations and blockchain types. These definitions come directly from the Hive blockchain source code.
+
+### Why Protocol Buffers?
+
+<CardGroup cols={2}>
+  <Card title="Type Safety" icon="shield-check">
+    Strong typing ensures your operations are correctly structured before they reach the blockchain
+  </Card>
+  
+  <Card title="Efficiency" icon="gauge-high">
+    Compact binary serialization reduces bandwidth and storage requirements
+  </Card>
+  
+  <Card title="Cross-Language" icon="language">
+    Single source of truth works across TypeScript, Python, and C++
+  </Card>
+  
+  <Card title="Validation" icon="circle-check">
+    Built-in validation ensures operations meet protocol requirements
+  </Card>
+</CardGroup>
+
+### Source location
+
+All protocol definitions originate from the Hive blockchain repository:
+
+```
+hive/libraries/protocol/proto/
+├── transaction.proto
+├── operation.proto
+├── vote.proto
+├── transfer.proto
+├── comment.proto
+└── ... (100+ operation types)
+```
+
+## Operation structure
+
+Every operation follows a consistent structure with required and optional fields:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Vote operation definition
+    export interface vote {
+      voter: string;      // Account name
+      author: string;     // Post author
+      permlink: string;   // Post identifier
+      weight: number;     // -10000 to 10000
+    }
+    
+    // Transfer operation definition
+    export interface transfer {
+      from: string;              // Sender account
+      to: string;                // Recipient account
+      amount: asset | undefined; // Amount to transfer
+      memo: string;              // Optional memo
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.proto.operations import vote, transfer
+    
+    # Vote operation
+    vote_op = vote(
+        voter="alice",
+        author="bob",
+        permlink="example-post",
+        weight=10000
+    )
+    
+    # Transfer operation
+    transfer_op = transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive(1),
+        memo="Payment"
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Common operations
+
+Here are the most frequently used operations:
+
+### Vote operation
+
+Upvote or downvote content on the blockchain.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    tx.pushOperation({
+      vote_operation: {
+        voter: "alice",
+        author: "bob",
+        permlink: "example-post",
+        weight: 10000  // 100% upvote
+      }
+    });
+    
+    // Downvote
+    tx.pushOperation({
+      vote_operation: {
+        voter: "alice",
+        author: "spam-account",
+        permlink: "spam-post",
+        weight: -10000  // 100% downvote
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.proto.operations import vote
+    
+    # Upvote
+    tx.push_operation(
+        vote(
+            voter="alice",
+            author="bob",
+            permlink="example-post",
+            weight=10000  # 100% upvote
+        )
+    )
+    
+    # Downvote
+    tx.push_operation(
+        vote(
+            voter="alice",
+            author="spam-account",
+            permlink="spam-post",
+            weight=-10000  # 100% downvote
+        )
+    )
+    ```
+  </Tab>
+</Tabs>
+
+**Fields:**
+- `voter`: Account casting the vote
+- `author`: Author of the content
+- `permlink`: Unique identifier for the content
+- `weight`: Vote strength from -10000 (100% downvote) to 10000 (100% upvote)
+
+### Transfer operation
+
+Transfer HIVE or HBD between accounts.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Transfer HIVE
+    tx.pushOperation({
+      transfer_operation: {
+        from: "alice",
+        to: "bob",
+        amount: chain.hive(10.5),  // 10.5 HIVE
+        memo: "Payment for services"
+      }
+    });
+    
+    // Transfer HBD
+    tx.pushOperation({
+      transfer_operation: {
+        from: "alice",
+        to: "bob",
+        amount: chain.hbd(25),  // 25 HBD
+        memo: "Invoice #12345"
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.proto.operations import transfer
+    
+    # Transfer HIVE
+    tx.push_operation(
+        transfer(
+            from_account="alice",
+            to_account="bob",
+            amount=chain.hive(10.5),  # 10.5 HIVE
+            memo="Payment for services"
+        )
+    )
+    
+    # Transfer HBD
+    tx.push_operation(
+        transfer(
+            from_account="alice",
+            to_account="bob",
+            amount=chain.hbd(25),  # 25 HBD
+            memo="Invoice #12345"
+        )
+    )
+    ```
+  </Tab>
+</Tabs>
+
+**Fields:**
+- `from`: Sender account name
+- `to`: Recipient account name
+- `amount`: Asset amount (HIVE or HBD)
+- `memo`: Optional message (max 2048 characters, can be encrypted)
+
+<Note>
+  When a memo starts with `#`, WAX automatically encrypts it using the accounts' memo keys.
+</Note>
+
+### Comment operation
+
+Create posts and comments.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Create a post
+    tx.pushOperation({
+      comment_operation: {
+        parent_author: "",
+        parent_permlink: "blog",
+        author: "alice",
+        permlink: "my-first-post",
+        title: "Hello Hive!",
+        body: "This is my first post on Hive.",
+        json_metadata: JSON.stringify({
+          tags: ["introduction", "hive"],
+          app: "myapp/1.0.0"
+        })
+      }
+    });
+    
+    // Create a comment
+    tx.pushOperation({
+      comment_operation: {
+        parent_author: "bob",
+        parent_permlink: "example-post",
+        author: "alice",
+        permlink: "re-example-post-20260304",
+        title: "",
+        body: "Great post!",
+        json_metadata: ""
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.proto.operations import comment
+    import json
+    
+    # Create a post
+    tx.push_operation(
+        comment(
+            parent_author="",
+            parent_permlink="blog",
+            author="alice",
+            permlink="my-first-post",
+            title="Hello Hive!",
+            body="This is my first post on Hive.",
+            json_metadata=json.dumps({
+                "tags": ["introduction", "hive"],
+                "app": "myapp/1.0.0"
+            })
+        )
+    )
+    
+    # Create a comment
+    tx.push_operation(
+        comment(
+            parent_author="bob",
+            parent_permlink="example-post",
+            author="alice",
+            permlink="re-example-post-20260304",
+            title="",
+            body="Great post!",
+            json_metadata=""
+        )
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Custom JSON operation
+
+Execute custom application logic.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    tx.pushOperation({
+      custom_json_operation: {
+        id: "follow",
+        json: JSON.stringify([
+          "follow",
+          {
+            follower: "alice",
+            following: "bob",
+            what: ["blog"]
+          }
+        ]),
+        required_auths: [],
+        required_posting_auths: ["alice"]
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.proto.operations import custom_json
+    import json
+    
+    tx.push_operation(
+        custom_json(
+            id="follow",
+            json=json.dumps([
+                "follow",
+                {
+                    "follower": "alice",
+                    "following": "bob",
+                    "what": ["blog"]
+                }
+            ]),
+            required_auths=[],
+            required_posting_auths=["alice"]
+        )
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Operation naming conventions
+
+<Warning>
+  Operation names differ between the protocol definition and the runtime usage. Be aware of the `_operation` suffix.
+</Warning>
+
+### TypeScript
+
+In TypeScript, operations use the `_operation` suffix when pushed to transactions:
+
+```typescript
+import { vote } from "@hiveio/wax";
+
+// Import uses the base name
+import type { vote } from "@hiveio/wax";
+
+// Push uses the _operation suffix
+tx.pushOperation({
+  vote_operation: {
+    voter: "alice",
+    author: "bob",
+    permlink: "post",
+    weight: 10000
+  }
+});
+```
+
+### Python
+
+In Python, the proto classes use the base name, but the runtime expects the `_operation` suffix:
+
+```python
+from wax.proto.operations import vote
+
+# Import the class without suffix
+vote_op = vote(
+    voter="alice",
+    author="bob",
+    permlink="post",
+    weight=10000
+)
+
+# Push operation (handled internally)
+tx.push_operation(vote_op)
+```
+
+## Complex operations
+
+WAX provides high-level builders for operations that require multiple fields or complex logic:
+
+### Account update operation
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { AccountUpdateBuilder } from "@hiveio/wax";
+    
+    const accountUpdate = new AccountUpdateBuilder("alice")
+      .updatePosting({
+        account_auths: {},
+        key_auths: {
+          "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9": 1
+        },
+        weight_threshold: 1
+      })
+      .updateMemo("STM5VJ9YJH7r6pAQmvjN3pUbdwLqQ6CjQMhC7vLPapj4KPvChqKnH");
+    
+    tx.pushOperation(accountUpdate);
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.complex_operations import AccountUpdateBuilder
+    
+    account_update = (
+        AccountUpdateBuilder("alice")
+        .update_posting(
+            account_auths={},
+            key_auths={
+                "STM6vJmrwaX5TjgTS9dPH8KsArso5m91fVodJvv91j7G765wqcNM9": 1
+            },
+            weight_threshold=1
+        )
+        .update_memo("STM5VJ9YJH7r6pAQmvjN3pUbdwLqQ6CjQMhC7vLPapj4KPvChqKnH")
+    )
+    
+    tx.push_operation(account_update)
+    ```
+  </Tab>
+</Tabs>
+
+### Recurrent transfer operation
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { RecurrentTransferBuilder } from "@hiveio/wax";
+    
+    const recurrent = new RecurrentTransferBuilder()
+      .setFrom("alice")
+      .setTo("bob")
+      .setAmount(chain.hive(10))
+      .setMemo("Monthly payment")
+      .setRecurrence(24)  // Every 24 hours
+      .setExecutions(30); // 30 times
+    
+    tx.pushOperation(recurrent);
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from wax.complex_operations import RecurrentTransferBuilder
+    
+    recurrent = (
+        RecurrentTransferBuilder()
+        .set_from("alice")
+        .set_to("bob")
+        .set_amount(chain.hive(10))
+        .set_memo("Monthly payment")
+        .set_recurrence(24)  # Every 24 hours
+        .set_executions(30)  # 30 times
+    )
+    
+    tx.push_operation(recurrent)
+    ```
+  </Tab>
+</Tabs>
+
+## Creating custom operation builders
+
+You can create your own operation builders for reusable operation patterns:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript ts/wasm/lib/detailed/operation_base.ts
+    import { OperationBase, type IOperationSink, type operation } from "@hiveio/wax";
+    
+    export class MyCustomOperation extends OperationBase {
+      private operations: operation[] = [];
+      
+      constructor(
+        public readonly account: string,
+        public readonly target: string
+      ) {
+        super();
+      }
+      
+      public finalize(sink: IOperationSink): Iterable<operation> {
+        // Build your operations here
+        this.operations.push({
+          custom_json_operation: {
+            id: "my-app",
+            json: JSON.stringify({
+              account: this.account,
+              target: this.target
+            }),
+            required_auths: [],
+            required_posting_auths: [this.account]
+          }
+        });
+        
+        return this.operations;
+      }
+    }
+    
+    // Usage
+    const op = new MyCustomOperation("alice", "bob");
+    tx.pushOperation(op);
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python python/wax/_private/operation_base.py
+    from wax._private.operation_base import OperationBase
+    from wax.proto.operations import custom_json
+    import json
+    
+    class MyCustomOperation(OperationBase):
+        def __init__(self, account: str, target: str):
+            self.account = account
+            self.target = target
+        
+        def finalize(self, api):
+            # Build your operations here
+            yield custom_json(
+                id="my-app",
+                json=json.dumps({
+                    "account": self.account,
+                    "target": self.target
+                }),
+                required_auths=[],
+                required_posting_auths=[self.account]
+            )
+    
+    # Usage
+    op = MyCustomOperation("alice", "bob")
+    tx.push_operation(op)
+    ```
+  </Tab>
+</Tabs>
+
+## Operation validation
+
+Operations are validated at multiple levels:
+
+### Protocol-level validation
+
+The C++ core validates:
+- Field types and formats
+- Account name validity
+- Asset precision and amounts
+- String length limits
+- Required field presence
+
+### Application-level validation
+
+Your code should validate:
+- Business logic requirements
+- User permissions
+- Balance sufficiency
+- Rate limiting
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    try {
+      tx.pushOperation({
+        transfer_operation: {
+          from: "alice",
+          to: "bob",
+          amount: chain.hive(10),
+          memo: "Payment"
+        }
+      });
+      
+      tx.validate();
+    } catch (error) {
+      if (error.message.includes("insufficient")) {
+        console.error("Not enough balance");
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    try:
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=chain.hive(10),
+                memo="Payment"
+            )
+        )
+        
+        tx.validate()
+    except Exception as error:
+        if "insufficient" in str(error):
+            print("Not enough balance")
+    ```
+  </Tab>
+</Tabs>
+
+## Asset types
+
+Many operations work with asset types (HIVE, HBD, VESTS):
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Create assets
+    const hive = chain.hive(10.5);        // 10.500 HIVE
+    const hbd = chain.hbd(25);            // 25.000 HBD
+    const vests = chain.vests(1000000);   // 1000000.000000 VESTS
+    
+    // From satoshis/smallest unit
+    const hive2 = chain.hiveFromSatoshis(10500);  // 10.500 HIVE
+    
+    // Asset structure
+    interface asset {
+      amount: string;  // "10500" (in satoshis)
+      precision: number;  // 3 for HIVE/HBD, 6 for VESTS
+      nai: string;  // "@@000000021" for HIVE
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    # Create assets
+    hive = chain.hive(10.5)           # 10.500 HIVE
+    hbd = chain.hbd(25)               # 25.000 HBD
+    vests = chain.vests(1000000)      # 1000000.000000 VESTS
+    
+    # From satoshis/smallest unit
+    hive2 = chain.hive_from_satoshis(10500)  # 10.500 HIVE
+    
+    # Asset structure
+    from wax.proto.asset import asset
+    
+    my_asset = asset(
+        amount="10500",      # In satoshis
+        precision=3,         # 3 for HIVE/HBD
+        nai="@@000000021"   # HIVE identifier
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Operation categories
+
+Operations are organized into several categories:
+
+<AccordionGroup>
+  <Accordion title="Account operations">
+    - `account_create`
+    - `account_update`
+    - `account_update2`
+    - `account_witness_vote`
+    - `account_witness_proxy`
+  </Accordion>
+  
+  <Accordion title="Transfer operations">
+    - `transfer`
+    - `transfer_to_vesting`
+    - `transfer_to_savings`
+    - `transfer_from_savings`
+    - `recurrent_transfer`
+  </Accordion>
+  
+  <Accordion title="Content operations">
+    - `comment`
+    - `vote`
+    - `delete_comment`
+    - `comment_options`
+  </Accordion>
+  
+  <Accordion title="Market operations">
+    - `limit_order_create`
+    - `limit_order_create2`
+    - `limit_order_cancel`
+    - `convert`
+    - `collateralized_convert`
+  </Accordion>
+  
+  <Accordion title="Witness operations">
+    - `witness_update`
+    - `witness_set_properties`
+    - `feed_publish`
+  </Accordion>
+  
+  <Accordion title="Governance operations">
+    - `create_proposal`
+    - `update_proposal_votes`
+    - `remove_proposal`
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Signing" icon="signature" href="/concepts/signing">
+    Learn how to sign transactions with operations
+  </Card>
+  
+  <Card title="Transactions" icon="file-invoice" href="/concepts/transactions">
+    Understand transaction structure and lifecycle
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Browse all available operations
+  </Card>
+  
+  <Card title="Examples" icon="code" href="/guides">
+    See operations in action
+  </Card>
+</CardGroup>

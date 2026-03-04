@@ -1,0 +1,330 @@
+---
+title: "API definitions"
+description: "Use API definition packages to interact with Hive network services"
+---
+
+API definition packages provide typed interfaces for interacting with various Hive network services. These packages keep the core WAX library lightweight while allowing you to add only the API definitions you need.
+
+## Overview
+
+The WAX SDK uses a modular approach to API definitions. Rather than bundling all possible API endpoints in the core library, separate packages provide definitions for different services:
+
+- **JSON-RPC APIs**: Core Hive node APIs (database_api, network_broadcast_api, etc.)
+- **REST APIs**: External services like HAF-based APIs
+
+This approach reduces bundle size and allows you to install only what you need.
+
+## Available API packages
+
+Here are the official API definition packages:
+
+<CardGroup cols={2}>
+
+<Card title="JSON-RPC API" icon="code">
+  **@hiveio/wax-api-jsonrpc**
+  
+  Full JSON-RPC API definitions for Hive nodes.
+</Card>
+
+<Card title="HAF Block Explorer" icon="cube">
+  **@hiveio/wax-api-hafbe**
+  
+  Block Explorer REST API definitions.
+</Card>
+
+<Card title="Reputation Tracker" icon="star">
+  **@hiveio/wax-api-reputation-tracker**
+  
+  Reputation tracking REST API definitions.
+</Card>
+
+<Card title="Balance Tracker" icon="wallet">
+  **@hiveio/wax-api-balance-tracker**
+  
+  Account balance tracking API definitions.
+</Card>
+
+<Card title="Account History" icon="clock-rotate-left">
+  **@hiveio/wax-api-hafah**
+  
+  HAF Account History REST API definitions.
+</Card>
+
+</CardGroup>
+
+## Using JSON-RPC APIs
+
+The JSON-RPC API package provides definitions for standard Hive node APIs.
+
+### Installation
+
+```bash
+npm install @hiveio/wax-api-jsonrpc
+```
+
+### Basic usage
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import { ApiDatabaseApiMethods } from "@hiveio/wax-api-jsonrpc";
+
+const chain = await createHiveChain();
+
+// Extend chain with database_api definitions
+const extended = chain.extend<{
+  database_api: ApiDatabaseApiMethods
+}>();
+
+// Now you have full type support and validation
+const accounts = await extended.api.database_api.find_accounts({
+  accounts: ["alice", "bob"]
+});
+
+console.log(accounts);
+```
+
+### Available JSON-RPC APIs
+
+The package includes definitions for:
+
+- **database_api**: Query blockchain data
+- **network_broadcast_api**: Broadcast transactions
+- **block_api**: Retrieve blocks and block data
+- **account_by_key_api**: Find accounts by public key
+- **rc_api**: Resource credit information
+
+## Using REST APIs
+
+REST API packages provide definitions for external services built on HAF (Hive Application Framework).
+
+### Installation
+
+Install the REST API package you need:
+
+```bash
+# HAF Block Explorer
+npm install @hiveio/wax-api-hafbe
+
+# Account History
+npm install @hiveio/wax-api-hafah
+
+# Reputation Tracker
+npm install @hiveio/wax-api-reputation-tracker
+
+# Balance Tracker
+npm install @hiveio/wax-api-balance-tracker
+```
+
+### Basic usage
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import type { HafbeApi } from "@hiveio/wax-api-hafbe";
+
+const chain = await createHiveChain();
+
+// Extend with HAF Block Explorer REST API
+const extended = chain.extendRest<HafbeApi>({
+  // API configuration
+});
+
+// Make REST API calls with full type support
+const blockData = await extended.restApi['hafbe-api'].blocks.byNumber({
+  blockNumber: 12345
+});
+```
+
+## Creating custom API definitions
+
+You can create your own API definitions for custom services:
+
+### For JSON-RPC APIs
+
+```typescript
+import { createHiveChain, TWaxApiRequest } from "@hiveio/wax";
+
+// Define request and response interfaces
+interface CustomRequest {
+  param1: string;
+  param2: number;
+}
+
+interface CustomResponse {
+  result: string;
+}
+
+// Define API structure
+type CustomApi = {
+  custom_api: {
+    custom_method: TWaxApiRequest<CustomRequest, CustomResponse>
+  }
+};
+
+// Use it
+const chain = await createHiveChain();
+const extended = chain.extend<CustomApi>();
+
+const result = await extended.api.custom_api.custom_method({
+  param1: "value",
+  param2: 42
+});
+```
+
+### For REST APIs
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+// Define REST API structure
+type CustomRestApi = {
+  'my-service': {
+    users: {
+      byId: {
+        params: { userId: string };
+        result: { name: string; email: string };
+      }
+    }
+  }
+};
+
+// Configure endpoint structure
+const chain = await createHiveChain();
+const extended = chain.extendRest<CustomRestApi>({
+  'my-service': {
+    users: {
+      byId: {
+        urlPath: "{userId}"
+      }
+    }
+  }
+});
+
+// Make requests
+const user = await extended.restApi['my-service'].users.byId({
+  userId: "123"
+});
+```
+
+## API definition generator
+
+WAX provides a tool to automatically generate API definitions from OpenAPI/Swagger specifications:
+
+```bash
+npm install -g @hiveio/wax-spec-generator
+```
+
+Use it to create API definition packages:
+
+```bash
+wax-spec-gen --input swagger.json --output ./my-api-defs
+```
+
+This generates TypeScript types and validators for your API, ready to use with WAX.
+
+## Benefits of API packages
+
+<CardGroup cols={2}>
+
+<Card title="Type safety" icon="shield-check">
+  Full TypeScript support with autocomplete and validation.
+</Card>
+
+<Card title="Smaller bundles" icon="feather">
+  Only include the APIs you actually use.
+</Card>
+
+<Card title="Versioning" icon="code-branch">
+  Independent versioning for each API package.
+</Card>
+
+<Card title="Custom APIs" icon="puzzle-piece">
+  Easy to add support for custom services.
+</Card>
+
+</CardGroup>
+
+## Example: Multi-API application
+
+Here's an example using multiple API packages together:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import { ApiDatabaseApiMethods } from "@hiveio/wax-api-jsonrpc";
+import type { HafbeApi } from "@hiveio/wax-api-hafbe";
+import type { HafahApi } from "@hiveio/wax-api-hafah";
+
+// Create chain and extend with multiple APIs
+const chain = await createHiveChain();
+
+const extended = chain
+  .extend<{
+    database_api: ApiDatabaseApiMethods
+  }>()
+  .extendRest<HafbeApi & HafahApi>({
+    // REST API configuration
+  });
+
+// Use JSON-RPC API
+const accounts = await extended.api.database_api.find_accounts({
+  accounts: ["alice"]
+});
+
+// Use HAF Block Explorer REST API
+const blocks = await extended.restApi['hafbe-api'].blocks.byNumber({
+  blockNumber: 12345
+});
+
+// Use Account History REST API
+const history = await extended.restApi['hafah-api'].accounts.history({
+  accountName: "alice"
+});
+```
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Install only what you need">
+Don't install all API packages if you only use a few endpoints. Keep your bundle size small by installing only the packages you actually use.
+</Accordion>
+
+<Accordion title="Use type inference">
+Let TypeScript infer types from the API definitions rather than manually typing responses:
+
+```typescript
+// Good - type is inferred
+const accounts = await api.database_api.find_accounts({ accounts: ["alice"] });
+
+// Unnecessary - don't manually type what's already inferred
+const accounts: AccountsResult = await api.database_api.find_accounts(...);
+```
+</Accordion>
+
+<Accordion title="Cache API instances">
+Extending the chain creates new instances. Cache the extended chain to avoid recreating it:
+
+```typescript
+// Create once
+const extendedChain = chain.extend<ApiTypes>();
+
+// Reuse
+await extendedChain.api.database_api.find_accounts(...);
+await extendedChain.api.database_api.get_dynamic_global_properties();
+```
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="API extensions guide" icon="plug" href="/guides/api-extensions">
+  Learn more about extending APIs.
+</Card>
+
+<Card title="TypeScript examples" icon="code" href="/typescript/examples">
+  See complete examples using APIs.
+</Card>
+
+</CardGroup>

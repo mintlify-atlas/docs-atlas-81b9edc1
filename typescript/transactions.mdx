@@ -1,0 +1,629 @@
+---
+title: Building and managing transactions
+description: Create, sign, and broadcast transactions on the Hive blockchain
+---
+
+Transactions are the fundamental building blocks for interacting with the Hive blockchain. Learn how to build, sign, validate, and broadcast transactions using the WAX SDK.
+
+## Transaction basics
+
+A transaction contains:
+
+- **Operations** - One or more blockchain actions (votes, transfers, posts, etc.)
+- **TaPoS** - Transaction as Proof of Stake (reference block)
+- **Expiration** - When the transaction becomes invalid
+- **Signatures** - Cryptographic proofs from required authorities
+
+## Creating transactions
+
+### Online transactions
+
+Use `createHiveChain()` for automatic TaPoS handling:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+// TaPoS is automatically set using the current head block
+```
+
+With custom expiration:
+
+```typescript
+const tx = await chain.createTransaction("+30m"); // 30 minutes
+const tx = await chain.createTransaction("+2h");  // 2 hours
+const tx = await chain.createTransaction(new Date("2024-12-31T23:59:59Z"));
+```
+
+### Offline transactions
+
+Use `createWaxFoundation()` with a block ID:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+
+// You need to obtain a recent block ID from the network
+const headBlockId = "0129d3f75e53c4c8e35b52548f5f2e45b3e0c8b3";
+
+const tx = wax.createTransactionWithTaPoS(headBlockId, "+1h");
+```
+
+## Adding operations
+
+### Simple operations
+
+Push operations as inline objects:
+
+```typescript
+// Vote operation
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "my-post",
+    weight: 10000 // 100%
+  }
+});
+
+// Transfer operation
+tx.pushOperation({
+  transfer: {
+    from_account: "alice",
+    to_account: "bob",
+    amount: chain.hiveCoins(10),
+    memo: "Thanks for the post!"
+  }
+});
+
+// Follow operation (custom JSON)
+tx.pushOperation({
+  custom_json_operation: {
+    id: "follow",
+    json: JSON.stringify([
+      "follow",
+      {
+        follower: "alice",
+        following: "bob",
+        what: ["blog"]
+      }
+    ]),
+    required_auths: [],
+    required_posting_auths: ["alice"]
+  }
+});
+```
+
+### Complex operations
+
+Use operation factories for multi-operation scenarios:
+
+```typescript
+import { BlogPostOperation, ReplyOperation } from "@hiveio/wax";
+
+// Create a blog post
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  permlink: "my-first-post",
+  title: "Hello Hive!",
+  body: "This is my first post on Hive.",
+  category: "hive-174695", // Community or main tag
+  tags: ["introduceyourself", "blog"],
+  description: "My introduction to Hive",
+  beneficiaries: [
+    { account: "bob", weight: 500 } // 5% to bob
+  ]
+}));
+
+// Reply to a post
+tx.pushOperation(new ReplyOperation({
+  parentAuthor: "bob",
+  parentPermlink: "some-post",
+  author: "alice",
+  permlink: "re-some-post-20240101",
+  body: "Great post!"
+}));
+```
+
+Recurrent transfer:
+
+```typescript
+import { DefineRecurrentTransferOperation } from "@hiveio/wax";
+
+tx.pushOperation(new DefineRecurrentTransferOperation({
+  from: "alice",
+  to: "bob",
+  amount: chain.hiveCoins(10),
+  memo: "Monthly payment",
+  recurrence: 24, // Hours between transfers
+  executions: 12, // Number of transfers
+  pairId: 1 // Unique identifier for this recurrent transfer
+}));
+```
+
+Update account authority:
+
+```typescript
+import { AccountAuthorityUpdateOperation } from "@hiveio/wax";
+
+tx.pushOperation(new AccountAuthorityUpdateOperation({
+  accountName: "alice"
+})
+  .addAccountPostingAuth("bob", 1) // Add bob with weight 1
+  .addKeyPostingAuth("STM8ZSw...", 1) // Add public key with weight 1
+  .updatePostingAuthorityThreshold(1) // Set threshold to 1
+);
+```
+
+### Hive Apps operations
+
+Specialized operations for Hive applications:
+
+```typescript
+import { FollowOperation, CommunityOperation, ResourceCreditsOperation } from "@hiveio/wax";
+
+// Follow an account
+tx.pushOperation(new FollowOperation("alice")
+  .follow("bob", ["blog"])
+);
+
+// Community operations
+tx.pushOperation(new CommunityOperation("alice")
+  .subscribe("hive-174695")
+);
+
+// Delegate resource credits
+tx.pushOperation(new ResourceCreditsOperation("alice")
+  .delegate("bob", chain.vestsCoins(1000))
+);
+```
+
+## Transaction properties
+
+### Transaction ID
+
+Get the transaction hash:
+
+```typescript
+const txId = tx.id; // HF26 serialization (recommended)
+const legacyTxId = tx.legacy_id; // Legacy serialization (deprecated)
+
+console.log(`Transaction ID: ${txId}`);
+```
+
+### Signature digest
+
+Get the digest for signing:
+
+```typescript
+const digest = tx.sigDigest; // HF26 serialization (recommended)
+const legacyDigest = tx.legacy_sigDigest; // Legacy serialization (deprecated)
+
+console.log(`Digest: ${digest}`);
+```
+
+### Impacted accounts
+
+Find which accounts are affected:
+
+```typescript
+const accounts = tx.impactedAccounts;
+console.log([...accounts]); // ["alice", "bob"]
+```
+
+### Required authorities
+
+Determine which authorities must sign:
+
+```typescript
+const authorities = tx.requiredAuthorities;
+
+console.log("Posting:", [...authorities.posting]);
+console.log("Active:", [...authorities.active]);
+console.log("Owner:", [...authorities.owner]);
+```
+
+## Signing transactions
+
+The `sign()` method is deprecated. Use dedicated signer packages instead.
+
+### Using Beekeeper
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+
+// Initialize Beekeeper
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("my-salt");
+const { wallet } = await session.createWallet("my-wallet", "password");
+
+// Import private key
+const publicKey = await wallet.importKey("5JWcdkhS...");
+
+// Sign transaction
+const signature = await wallet.signDigest(tx.sigDigest, publicKey);
+tx.addSignature(signature);
+
+console.log("Transaction signed!");
+```
+
+### Using Hive Keychain
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import { KeychainSigner } from "@hiveio/wax-signers-keychain";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+
+// Initialize Keychain signer
+const signer = new KeychainSigner();
+
+// Sign transaction
+const signature = await signer.signTransaction(tx, "alice", "posting");
+tx.addSignature(signature);
+
+console.log("Transaction signed with Keychain!");
+```
+
+### Using MetaMask Snaps
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+import { MetaMaskSigner } from "@hiveio/wax-signers-metamask";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  transfer: {
+    from_account: "alice",
+    to_account: "bob",
+    amount: chain.hiveCoins(1),
+    memo: "Test"
+  }
+});
+
+// Initialize MetaMask signer
+const signer = new MetaMaskSigner();
+await signer.connect();
+
+// Sign transaction
+const signature = await signer.signTransaction(tx, "alice");
+tx.addSignature(signature);
+
+console.log("Transaction signed with MetaMask!");
+```
+
+## Validating transactions
+
+Validate transaction structure before broadcasting:
+
+```typescript
+try {
+  tx.validate();
+  console.log("Transaction is valid");
+} catch (error) {
+  console.error("Validation failed:", error.message);
+}
+```
+
+For online transactions, perform on-chain verification:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+// Build and sign transaction...
+
+try {
+  await tx.performOnChainVerification();
+  console.log("On-chain verification passed");
+} catch (error) {
+  console.error("On-chain verification failed:", error.message);
+}
+```
+
+## Broadcasting transactions
+
+Send a signed transaction to the network:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+// Build and sign transaction...
+
+try {
+  await chain.broadcast(tx);
+  console.log(`Transaction ${tx.id} broadcasted successfully!`);
+} catch (error) {
+  console.error("Broadcast failed:", error.message);
+}
+```
+
+## Transaction formats
+
+### Convert to API JSON
+
+Convert to Hive API format:
+
+```typescript
+const apiJson = tx.toApiJson();
+console.log(JSON.stringify(apiJson, null, 2));
+```
+
+Output:
+
+```json
+{
+  "ref_block_num": 54263,
+  "ref_block_prefix": 1405684741,
+  "expiration": "2024-12-31T23:59:59",
+  "operations": [
+    {
+      "type": "vote",
+      "value": {
+        "voter": "alice",
+        "author": "bob",
+        "permlink": "test-post",
+        "weight": 10000
+      }
+    }
+  ],
+  "extensions": [],
+  "signatures": ["1f3a5b..."]
+}
+```
+
+### Convert to legacy format
+
+```typescript
+const legacyJson = tx.toLegacyApi();
+```
+
+Output (deprecated format):
+
+```json
+{
+  "ref_block_num": 54263,
+  "ref_block_prefix": 1405684741,
+  "expiration": "2024-12-31T23:59:59",
+  "operations": [
+    [
+      "vote",
+      {
+        "voter": "alice",
+        "author": "bob",
+        "permlink": "test-post",
+        "weight": 10000
+      }
+    ]
+  ],
+  "extensions": [],
+  "signatures": ["1f3a5b..."]
+}
+```
+
+### Convert to binary
+
+Serialize to hexadecimal string:
+
+```typescript
+const binary = tx.toBinaryForm();
+const unsignedBinary = tx.toBinaryForm(true); // Without signatures
+
+console.log(`Binary: ${binary}`);
+```
+
+### Parse from JSON
+
+Create transaction from Hive API JSON:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+
+const apiJson = {
+  ref_block_num: 54263,
+  ref_block_prefix: 1405684741,
+  expiration: "2024-12-31T23:59:59",
+  operations: [
+    {
+      type: "vote",
+      value: {
+        voter: "alice",
+        author: "bob",
+        permlink: "test-post",
+        weight: 10000
+      }
+    }
+  ],
+  extensions: [],
+  signatures: []
+};
+
+const tx = wax.createTransactionFromJson(apiJson);
+console.log(`Transaction ID: ${tx.id}`);
+```
+
+Parse from legacy JSON:
+
+```typescript
+const legacyJson = {
+  ref_block_num: 54263,
+  ref_block_prefix: 1405684741,
+  expiration: "2024-12-31T23:59:59",
+  operations: [
+    [
+      "vote",
+      {
+        voter: "alice",
+        author: "bob",
+        permlink: "test-post",
+        weight: 10000
+      }
+    ]
+  ],
+  extensions: [],
+  signatures: []
+};
+
+const tx = wax.createTransactionFromLegacyJson(legacyJson);
+```
+
+## Encryption
+
+Encrypt sensitive operation fields:
+
+```typescript
+import { createWaxFoundation } from "@hiveio/wax";
+
+const wax = await createWaxFoundation();
+const tx = wax.createTransactionWithTaPoS(blockId);
+
+const alicePublicKey = "STM8ZSw...";
+const bobPublicKey = "STM7Abc...";
+
+// Start encryption
+tx.startEncrypt(alicePublicKey, bobPublicKey)
+  .pushOperation({
+    transfer: {
+      from_account: "alice",
+      to_account: "bob",
+      amount: wax.hiveCoins(10),
+      memo: "This will be encrypted" // Encrypted when signed
+    }
+  })
+  .stopEncrypt();
+
+// Operations added after stopEncrypt() are not encrypted
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "test-post",
+    weight: 10000
+  }
+});
+```
+
+Supported encrypted fields:
+
+- `comment_operation.body`
+- `custom_json_operation.json`
+- `transfer.memo`
+- `transfer_to_savings.memo`
+- `transfer_from_savings.memo`
+- `recurrent_transfer.memo`
+
+## Authority verification trace
+
+Generate a detailed authority verification trace:
+
+```typescript
+import { createHiveChain } from "@hiveio/wax";
+
+const chain = await createHiveChain();
+const tx = await chain.createTransaction();
+
+// Build and sign transaction...
+
+const trace = await tx.generateAuthorityVerificationTrace();
+
+console.log("Verification steps:", trace.steps);
+console.log("Required authorities:", trace.requiredAuthorities);
+console.log("Provided signatures:", trace.providedSignatures);
+```
+
+## Complete example
+
+A full transaction workflow:
+
+```typescript
+import { createHiveChain, BlogPostOperation } from "@hiveio/wax";
+import createBeekeeper from "@hiveio/wax-signers-beekeeper";
+
+// Initialize chain and wallet
+const chain = await createHiveChain();
+const beekeeper = await createBeekeeper();
+const session = beekeeper.createSession("salt");
+const { wallet } = await session.createWallet("wallet", "password");
+const publicKey = await wallet.importKey("5JWcdkhS...");
+
+// Create transaction
+const tx = await chain.createTransaction("+1h");
+
+// Add operations
+tx.pushOperation(new BlogPostOperation({
+  author: "alice",
+  permlink: "hello-hive",
+  title: "Hello Hive!",
+  body: "This is my first post.",
+  category: "hive-174695",
+  tags: ["introduceyourself"],
+  description: "My introduction"
+}));
+
+// Validate
+tx.validate();
+console.log("Transaction is valid");
+
+// Sign
+const signature = await wallet.signDigest(tx.sigDigest, publicKey);
+tx.addSignature(signature);
+
+console.log(`Transaction ${tx.id} signed`);
+
+// Verify signatures
+if (tx.isSigned()) {
+  console.log("Transaction has signatures");
+  console.log("Signature keys:", tx.signatureKeys);
+}
+
+// Broadcast
+try {
+  await chain.broadcast(tx);
+  console.log("Transaction broadcasted successfully!");
+} catch (error) {
+  console.error("Broadcast failed:", error.message);
+}
+```
+
+## Next steps
+
+Explore more transaction capabilities:
+
+- Learn about [API calls](/typescript/api-calls) to query blockchain data
+- Integrate with [frameworks](/typescript/framework-integration)
+- Study [working examples](/typescript/examples)

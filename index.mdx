@@ -1,97 +1,295 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "WAX Documentation"
+description: "High-performance SDK for Hive blockchain protocol features in Python and TypeScript"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative py-20 overflow-hidden bg-gradient-to-br from-[#0f1117] via-[#1a1d27] to-[#0f1117] dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#0f1117]">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="grid lg:grid-cols-12 gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6">
+          Build on Hive with WAX
+        </h1>
+        <p className="text-xl text-gray-300 mb-8 max-w-2xl">
+          A high-performance SDK that provides Hive blockchain protocol features to Python and TypeScript applications. Create, sign, and broadcast transactions with ease.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a
+            href="/quickstart"
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#e31337] hover:bg-[#b30f2b] text-white font-semibold transition-colors"
+          >
+            Get Started
+          </a>
+          <a
+            href="/introduction"
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors"
+          >
+            Learn More
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#e31337]/20 to-[#b30f2b]/20 rounded-2xl blur-3xl"></div>
+          <div className="relative bg-[#1a1d27] border border-[#27272a] rounded-2xl p-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[#e31337]">import</span>
+                <span className="text-gray-300">{'{'} createHiveChain {'}'}</span>
+                <span className="text-[#e31337]">from</span>
+                <span className="text-green-400">'@hiveio/wax'</span>
+              </div>
+              <div className="text-sm text-gray-400">// Initialize WAX</div>
+              <div className="text-sm">
+                <span className="text-[#e31337]">const</span>
+                <span className="text-gray-300"> chain = </span>
+                <span className="text-[#e31337]">await</span>
+                <span className="text-yellow-400"> createHiveChain</span>
+                <span className="text-gray-300">()</span>
+              </div>
+              <div className="text-sm text-gray-400">// Build transaction</div>
+              <div className="text-sm">
+                <span className="text-gray-300">chain.</span>
+                <span className="text-yellow-400">pushOperation</span>
+                <span className="text-gray-300">(op)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Quick Start</h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">Get started with WAX in your preferred language</p>
+  </div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install the package">
+      Choose your platform and install WAX using your package manager.
 
-## Make it yours
+      <Tabs>
+        <Tab title="TypeScript">
+          ```bash npm
+          npm install @hiveio/wax
+          ```
+          ```bash yarn
+          yarn add @hiveio/wax
+          ```
+          ```bash pnpm
+          pnpm add @hiveio/wax
+          ```
+        </Tab>
+        <Tab title="Python">
+          ```bash
+          pip install hiveio-wax
+          ```
+        </Tab>
+      </Tabs>
+    </Step>
 
-Design a docs site that looks great and empowers your users.
+    <Step title="Initialize WAX">
+      Create a WAX instance for offline operations or connect to the Hive network.
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+      <Tabs>
+        <Tab title="TypeScript">
+          ```typescript
+          import { createWaxFoundation, createHiveChain } from '@hiveio/wax';
+
+          // For offline operations (transaction building, signing)
+          const wax = await createWaxFoundation();
+
+          // For online operations (API calls, broadcasting)
+          const chain = await createHiveChain();
+          ```
+        </Tab>
+        <Tab title="Python">
+          ```python
+          from wax import create_wax_foundation, create_hive_chain
+
+          # For offline operations (transaction building, signing)
+          wax = create_wax_foundation()
+
+          # For online operations (API calls, broadcasting)
+          chain = create_hive_chain()
+          ```
+        </Tab>
+      </Tabs>
+    </Step>
+
+    <Step title="Build and sign a transaction">
+      Create a transaction, add operations, and sign it with your preferred signing provider.
+
+      <Tabs>
+        <Tab title="TypeScript">
+          ```typescript
+          // Create a transaction
+          const tx = await wax.createTransaction();
+
+          // Add operations
+          tx.pushOperation({
+            vote: {
+              voter: "alice",
+              author: "bob",
+              permlink: "example-post",
+              weight: 10000
+            }
+          });
+
+          // Sign and broadcast
+          await tx.sign(wallet, publicKey);
+          await chain.broadcast(tx.transaction);
+          ```
+        </Tab>
+        <Tab title="Python">
+          ```python
+          # Create a transaction
+          tx = wax.create_transaction()
+
+          # Add operations
+          tx.push_operation({
+              "vote": {
+                  "voter": "alice",
+                  "author": "bob",
+                  "permlink": "example-post",
+                  "weight": 10000
+              }
+          })
+
+          # Sign and broadcast
+          await tx.sign(wallet, public_key)
+          await chain.broadcast(tx.transaction)
+          ```
+        </Tab>
+      </Tabs>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Explore by Topic</h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">Jump into the documentation for your use case</p>
+  </div>
+
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Python SDK"
+      icon="python"
+      href="/python/overview"
+    >
+      Build Hive applications with Python using Cython bindings
+    </Card>
+    <Card
+      title="TypeScript SDK"
+      icon="code"
+      href="/typescript/overview"
+    >
+      Integrate Hive into JavaScript applications with WebAssembly
+    </Card>
+    <Card
+      title="Core Concepts"
+      icon="book-open"
+      href="/concepts/architecture"
+    >
+      Understand transactions, operations, and signing
+    </Card>
+    <Card
+      title="API Reference"
+      icon="terminal"
+      href="/api/python/wax-factory"
+    >
+      Detailed API documentation for both languages
+    </Card>
+    <Card
+      title="Guides"
+      icon="map"
+      href="/guides/building-transactions"
+    >
+      Step-by-step guides for common tasks
+    </Card>
+    <Card
+      title="Extensions"
+      icon="puzzle-piece"
+      href="/extensions/overview"
+    >
+      Signing providers and API extensions
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Key Features</h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">What makes WAX powerful for Hive development</p>
+  </div>
 
-Everything you need to create world-class documentation.
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="p-6 rounded-xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <div className="w-10 h-10 rounded-lg bg-[#e31337]/10 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-[#e31337]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Dual-Language Support</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Native SDKs for Python (Cython) and TypeScript (WebAssembly) from the same C++ core
+      </p>
+    </div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    <div className="p-6 rounded-xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <div className="w-10 h-10 rounded-lg bg-[#e31337]/10 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-[#e31337]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Flexible Signing</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Pluggable signing providers including Beekeeper, Keychain, MetaMask, and PeakVault
+      </p>
+    </div>
 
-## Need inspiration?
+    <div className="p-6 rounded-xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <div className="w-10 h-10 rounded-lg bg-[#e31337]/10 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-[#e31337]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Protocol Buffers</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Operations based on Protocol Buffers from hived C++ source ensure compatibility
+      </p>
+    </div>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <div className="p-6 rounded-xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <div className="w-10 h-10 rounded-lg bg-[#e31337]/10 flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-[#e31337]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Framework Support</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Works with Next.js, React, Vue, Nuxt, Node.js, and more with automatic environment detection
+      </p>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="p-8 rounded-2xl bg-gradient-to-br from-[#e31337] to-[#b30f2b] text-white">
+    <h2 className="text-3xl font-bold mb-4">Ready to Build on Hive?</h2>
+    <p className="text-lg mb-6 text-white/90">
+      Start building powerful blockchain applications with WAX today. Follow our quickstart guide to create your first transaction in minutes.
+    </p>
+    <a
+      href="/quickstart"
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#e31337] hover:bg-gray-100 font-semibold transition-colors"
+    >
+      Start Building Now
+    </a>
+  </div>
+</div>

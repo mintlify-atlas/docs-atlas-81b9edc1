@@ -1,0 +1,331 @@
+---
+title: Installation
+description: Install WAX for Python or TypeScript and start building on Hive
+---
+
+WAX is available for both Python and TypeScript. Choose your preferred language and follow the installation steps below.
+
+<Tabs>
+  <Tab title="Python">
+
+## Prerequisites
+
+Before installing WAX for Python, ensure you have:
+
+- Python 3.12 or higher (3.14+ recommended)
+- pip or Poetry package manager
+
+<Tip>
+We recommend using [Poetry](https://python-poetry.org/) for Python dependency management. Install it with:
+
+```bash
+curl -sSL https://install.python-poetry.org | python3 - --version 2.1.3
+```
+</Tip>
+
+## Install WAX
+
+<Steps>
+  <Step title="Create a virtual environment">
+    It's recommended to use a virtual environment for your project:
+
+    ```bash
+    python3 -m venv venv
+    source ./venv/bin/activate
+    ```
+  </Step>
+
+  <Step title="Set registry environment variables">
+    Configure pip to use the WAX package registry:
+
+    ```bash
+    export FIRST_INDEX="https://gitlab.syncad.com/api/v4/projects/362/packages/pypi/simple"
+    export SECOND_INDEX="https://gitlab.syncad.com/api/v4/projects/434/packages/pypi/simple"
+    export THIRD_INDEX="https://gitlab.syncad.com/api/v4/projects/198/packages/pypi/simple"
+    ```
+  </Step>
+
+  <Step title="Install the package">
+    Install WAX using pip:
+
+    ```bash
+    python3 -m pip install \
+      --index-url $FIRST_INDEX \
+      --extra-index-url $SECOND_INDEX \
+      --extra-index-url $THIRD_INDEX \
+      hiveio-wax
+    ```
+
+    Or with Poetry:
+
+    ```bash
+    poetry add hiveio-wax
+    ```
+  </Step>
+
+  <Step title="Verify installation">
+    Test that WAX is installed correctly:
+
+    ```python
+    from wax import create_wax_foundation
+
+    wax = create_wax_foundation()
+    print(wax.hive(5))  # Output: HIVE in NAI format
+    ```
+  </Step>
+</Steps>
+
+## Installing Beekeeper (optional)
+
+For transaction signing, you'll need a wallet integration. The recommended option is Beekeeper:
+
+```bash
+pip install beekeepy
+```
+
+Beekeeper provides a secure in-memory wallet for managing private keys.
+
+## Dependencies
+
+WAX for Python includes the following key dependencies:
+
+- `protobuf` - Protocol buffer support
+- `httpx` - Async HTTP client with HTTP/2
+- `loguru` - Logging
+- `python-dateutil` - Date utilities
+- `hiveio-api` - Hive API definitions
+
+These are installed automatically when you install WAX.
+
+  </Tab>
+  <Tab title="TypeScript">
+
+## Prerequisites
+
+Before installing WAX for TypeScript, ensure you have:
+
+- Node.js 20.11 or higher (or Node.js 21.2+)
+- npm or pnpm package manager
+
+<Tip>
+WAX works with various package managers, but we recommend [pnpm](https://pnpm.io/) for better performance and disk space efficiency.
+</Tip>
+
+## Install WAX
+
+<Steps>
+  <Step title="Configure registry for development versions">
+    If you want to use development versions, configure npm to use the GitLab registry for `@hiveio` scope:
+
+    ```bash
+    echo @hiveio:registry=https://gitlab.syncad.com/api/v4/groups/136/-/packages/npm/ >> .npmrc
+    ```
+
+    <Note>Skip this step if you only need stable releases from npm.</Note>
+  </Step>
+
+  <Step title="Install the package">
+    Install WAX using your preferred package manager:
+
+    <CodeGroup>
+
+    ```bash npm
+    npm install @hiveio/wax
+    ```
+
+    ```bash pnpm
+    pnpm add @hiveio/wax
+    ```
+
+    ```bash yarn
+    yarn add @hiveio/wax
+    ```
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Verify installation">
+    Create a test file to verify WAX is working:
+
+    ```typescript index.ts
+    import { createWaxFoundation } from '@hiveio/wax';
+
+    const wax = await createWaxFoundation();
+
+    // Creates a representation of 5 HIVE coins in NAI format
+    console.log(wax.hiveCoins(5));
+    ```
+
+    Run it with:
+
+    ```bash
+    node index.ts
+    ```
+  </Step>
+</Steps>
+
+## Installing wallet signers (optional)
+
+For transaction signing, you can install various wallet integrations:
+
+<CodeGroup>
+
+```bash Beekeeper
+npm install @hiveio/beekeeper
+```
+
+```bash Keychain
+npm install @hiveio/signers-keychain
+```
+
+```bash MetaMask
+npm install @hiveio/signers-metamask
+```
+
+```bash PeakVault
+npm install @hiveio/signers-peakvault
+```
+
+</CodeGroup>
+
+## Framework-specific setup
+
+WAX works seamlessly with popular frameworks:
+
+### Next.js
+
+No additional configuration needed. WAX automatically detects SSR environments.
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+
+export default async function Home() {
+  const chain = await createHiveChain();
+  // Use chain in your component
+}
+```
+
+### React + Vite
+
+WAX works out of the box with Vite:
+
+```typescript
+import { createWaxFoundation } from '@hiveio/wax';
+
+function App() {
+  const [wax, setWax] = useState(null);
+
+  useEffect(() => {
+    createWaxFoundation().then(setWax);
+  }, []);
+}
+```
+
+### Vue + Vite
+
+Similar to React, no special configuration required:
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+
+const chain = await createHiveChain();
+```
+
+### Nuxt
+
+WAX automatically handles Nuxt's SSR environment:
+
+```typescript
+import { createHiveChain } from '@hiveio/wax';
+
+export default defineNuxtComponent({
+  async setup() {
+    const chain = await createHiveChain();
+    return { chain };
+  }
+});
+```
+
+### Webpack
+
+WebAssembly is automatically handled by Webpack 5+. For older versions, you may need to configure WASM support.
+
+### Parcel
+
+Parcel requires the Buffer polyfill:
+
+```bash
+npm install buffer
+```
+
+## Environment detection
+
+WAX automatically resolves to the correct version based on your environment:
+
+- **Web environments**: Uses the web version with WASM
+- **Node.js**: Uses the Node.js version with optimized imports
+- **SSR**: Automatically handles server-side rendering scenarios
+
+You don't need to configure anything - it just works!
+
+## API definitions (optional)
+
+WAX core is intentionally lightweight. Install API definitions as needed:
+
+<CodeGroup>
+
+```bash JSON-RPC API
+npm install @hiveio/wax-api-jsonrpc
+```
+
+```bash Block Explorer API
+npm install @hiveio/wax-api-hafbe
+```
+
+```bash Account History API
+npm install @hiveio/wax-api-hafah
+```
+
+```bash Balance Tracker API
+npm install @hiveio/wax-api-balance-tracker
+```
+
+```bash Reputation Tracker API
+npm install @hiveio/wax-api-reputation-tracker
+```
+
+</CodeGroup>
+
+This modular approach keeps your bundle size small by only including the APIs you actually use.
+
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+### Python: ModuleNotFoundError
+
+If you get a `ModuleNotFoundError`, ensure:
+1. Your virtual environment is activated
+2. You've set the registry environment variables correctly
+3. You're using Python 3.12 or higher
+
+### TypeScript: Cannot find module
+
+If imports fail, try:
+1. Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+2. Ensure you're using Node.js 20.11+ or 21.2+
+3. Check that your bundler supports ESM modules
+
+### WASM loading errors
+
+If you see WASM-related errors in the browser:
+1. Check that your bundler is configured for WASM support
+2. Ensure you're serving the application over HTTP/HTTPS (not `file://`)
+3. For Vite, make sure assets are being copied correctly
+
+## Next steps
+
+<Card title="Quick start guide" icon="bolt" href="/quickstart">
+  Learn how to create your first Hive transaction with WAX
+</Card>

@@ -1,0 +1,417 @@
+---
+title: IHiveChainInterface
+description: Full chain access interface with API endpoints and transaction broadcasting
+---
+
+The `IHiveChainInterface` extends `IWaxBaseInterface` with online chain access capabilities, including API calls, transaction broadcasting, and enhanced transaction creation with automatic TAPOS.
+
+## Inheritance
+
+`IHiveChainInterface` extends all methods and properties from [IWaxBaseInterface](/api/typescript/wax-base-interface).
+
+## Properties
+
+### api
+
+Access to all Hive blockchain APIs through typed interfaces.
+
+```typescript
+readonly api: {
+  account_by_key_api: JsonRpcApiData<'account_by_key_api'>;
+  block_api: JsonRpcApiData<'block_api'>;
+  database_api: JsonRpcApiData<'database_api'>;
+  network_broadcast_api: JsonRpcApiData<'network_broadcast_api'>;
+  rc_api: JsonRpcApiData<'rc_api'>;
+};
+```
+
+#### Available APIs
+
+<ParamField path="account_by_key_api" type="object">
+  Account lookup by public key
+  
+  <Expandable title="methods">
+    <ParamField path="get_key_references" type="function">
+      Get account names associated with public keys
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="block_api" type="object">
+  Block data retrieval
+  
+  <Expandable title="methods">
+    <ParamField path="get_block" type="function">
+      Get a specific block by number
+    </ParamField>
+    <ParamField path="get_block_header" type="function">
+      Get block header information
+    </ParamField>
+    <ParamField path="get_block_range" type="function">
+      Get a range of blocks
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="database_api" type="object">
+  Core database queries
+  
+  <Expandable title="methods">
+    <ParamField path="find_accounts" type="function">
+      Find account information
+    </ParamField>
+    <ParamField path="find_witnesses" type="function">
+      Find witness information
+    </ParamField>
+    <ParamField path="get_dynamic_global_properties" type="function">
+      Get current chain state
+    </ParamField>
+    <ParamField path="get_witness_schedule" type="function">
+      Get witness schedule
+    </ParamField>
+    <ParamField path="verify_authority" type="function">
+      Verify transaction authority
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="network_broadcast_api" type="object">
+  Transaction broadcasting
+  
+  <Expandable title="methods">
+    <ParamField path="broadcast_transaction" type="function">
+      Broadcast a signed transaction to the network
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="rc_api" type="object">
+  Resource credit queries
+  
+  <Expandable title="methods">
+    <ParamField path="find_rc_accounts" type="function">
+      Find resource credit account information
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### restApi
+
+Access to REST API endpoints for hafbe (Hive Application Framework Backend).
+
+```typescript
+readonly restApi: TDefaultRestApi;
+```
+
+## Configuration
+
+### Setting endpoint URLs
+
+You can customize endpoint URLs per API or globally:
+
+```typescript
+// Set endpoint for specific API
+chain.api.database_api.endpointUrl = "https://custom-node.example.com";
+
+// Reset to default
+chain.api.database_api.endpointUrl = undefined;
+
+// Set REST API endpoint
+chain.restApi.endpointUrl = "https://custom-hafbe.example.com";
+```
+
+## Enhanced transaction methods
+
+### createTransaction
+
+Creates a transaction with automatic TAPOS using current head block.
+
+```typescript
+async createTransaction(expirationTime?: TTimestamp): Promise<IOnlineTransaction>;
+```
+
+<ParamField path="expirationTime" type="TTimestamp">
+  Optional expiration time. Can be:
+  - Date object
+  - Unix timestamp (number)
+  - ISO 8601 string
+  - Relative time: `"+10s"`, `"+30m"`, `"+1h"`
+  
+  Defaults to `"+1m"`
+</ParamField>
+
+<ResponseField name="Promise<IOnlineTransaction>" type="Promise<IOnlineTransaction>">
+  Promise that resolves to an online transaction with verification capabilities
+</ResponseField>
+
+#### Usage example
+
+```typescript
+// Create transaction with automatic TAPOS
+const tx = await chain.createTransaction("+5m");
+
+// Add operations
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+// Sign with signature provider
+const signature = await signer.signTransaction(tx.sigDigest);
+tx.addSignature(signature);
+
+// Broadcast
+await chain.api.network_broadcast_api.broadcast_transaction({
+  trx: tx.toApiJson()
+});
+```
+
+## API usage examples
+
+### Get dynamic global properties
+
+```typescript
+const dgpo = await chain.api.database_api.get_dynamic_global_properties({});
+
+console.log('Head block:', dgpo.head_block_number);
+console.log('Head block ID:', dgpo.head_block_id);
+console.log('Time:', dgpo.time);
+console.log('Current witness:', dgpo.current_witness);
+```
+
+### Find accounts
+
+```typescript
+const result = await chain.api.database_api.find_accounts({
+  accounts: ["alice", "bob"]
+});
+
+for (const account of result.accounts) {
+  console.log(`Account: ${account.name}`);
+  console.log(`Balance: ${account.balance.amount}`);
+  console.log(`Vesting shares: ${account.vesting_shares.amount}`);
+}
+```
+
+### Get block
+
+```typescript
+const block = await chain.api.block_api.get_block({
+  block_num: 12345678
+});
+
+console.log('Block ID:', block.block.block_id);
+console.log('Timestamp:', block.block.timestamp);
+console.log('Transactions:', block.block.transactions.length);
+```
+
+### Get key references
+
+```typescript
+const result = await chain.api.account_by_key_api.get_key_references({
+  keys: ["STM7Q2rLBqzPzFeteQZewv9Lu3NLE69fZoLeL6YK59t7UmssCBNTU"]
+});
+
+console.log('Accounts:', result.accounts);
+```
+
+### Find RC accounts
+
+```typescript
+const result = await chain.api.rc_api.find_rc_accounts({
+  accounts: ["alice"]
+});
+
+for (const account of result.rc_accounts) {
+  console.log(`Account: ${account.account}`);
+  console.log(`Max RC: ${account.max_rc}`);
+  console.log(`RC Manabar:`, account.rc_manabar);
+}
+```
+
+### Broadcast transaction
+
+```typescript
+// Create and sign transaction
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  vote: {
+    voter: "alice",
+    author: "bob",
+    permlink: "example-post",
+    weight: 10000
+  }
+});
+
+const signature = await signer.signTransaction(tx.sigDigest);
+tx.addSignature(signature);
+
+// Broadcast to network
+try {
+  await chain.api.network_broadcast_api.broadcast_transaction({
+    trx: tx.toApiJson()
+  });
+  console.log('Transaction broadcasted successfully');
+} catch (error) {
+  console.error('Broadcast failed:', error);
+}
+```
+
+## Online transaction features
+
+### IOnlineTransaction
+
+The `IOnlineTransaction` interface extends `ITransaction` with additional verification methods.
+
+#### performOnChainVerification
+
+Performs transaction checks that require chain API access.
+
+```typescript
+async performOnChainVerification(): Promise<void>;
+```
+
+Supported checks:
+- Private key leakage prevention
+- Authority validation
+
+#### generateAuthorityVerificationTrace
+
+Generates authority verification trace for the transaction.
+
+```typescript
+async generateAuthorityVerificationTrace(
+  useLegacySerialization?: boolean,
+  externalTx?: ITransaction
+): Promise<IVerifyAuthorityTrace>;
+```
+
+<ParamField path="useLegacySerialization" type="boolean">
+  Optional flag to use legacy (pre-HF26) serialization
+</ParamField>
+
+<ParamField path="externalTx" type="ITransaction">
+  Optional external transaction for verification
+</ParamField>
+
+<ResponseField name="Promise<IVerifyAuthorityTrace>" type="Promise<IVerifyAuthorityTrace>">
+  Authority verification trace data
+</ResponseField>
+
+#### Usage example
+
+```typescript
+// Create and sign transaction
+const tx = await chain.createTransaction();
+
+tx.pushOperation({
+  transfer: {
+    from: "alice",
+    to: "bob",
+    amount: chain.hiveCoins(10),
+    memo: "Test transfer"
+  }
+});
+
+const signature = await signer.signTransaction(tx.sigDigest);
+tx.addSignature(signature);
+
+// Verify on-chain (checks for private key leakage)
+try {
+  await tx.performOnChainVerification();
+  console.log('Transaction verified successfully');
+} catch (error) {
+  console.error('Verification failed:', error);
+}
+
+// Generate authority trace
+const trace = await tx.generateAuthorityVerificationTrace();
+console.log('Authority trace:', trace);
+```
+
+## API customization
+
+### Extending APIs
+
+You can extend the API with custom endpoints:
+
+```typescript
+// Add custom endpoint
+chain.api.custom_api = {
+  my_method: async (params) => {
+    const response = await fetch(`${chain.api.endpointUrl}/custom_api.my_method`, {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+    return response.json();
+  }
+};
+```
+
+### Setting API timeout
+
+API timeout is configured during chain creation:
+
+```typescript
+const chain = await createHiveChain({
+  apiTimeout: 5000 // 5 seconds
+});
+```
+
+### Custom API caller header
+
+Identify your application with the X-Wax-Api-Caller header:
+
+```typescript
+const chain = await createHiveChain({
+  waxApiCaller: "my-awesome-app/1.0.0"
+});
+```
+
+## TypeScript types
+
+```typescript
+type TTimestamp = Date | number | string;
+
+interface IOnlineTransaction extends ITransactionBase {
+  performOnChainVerification(): Promise<void>;
+  generateAuthorityVerificationTrace(
+    useLegacySerialization?: boolean,
+    externalTx?: ITransaction
+  ): Promise<IVerifyAuthorityTrace>;
+}
+
+interface IWaxOptionsChain extends IWaxOptions {
+  apiEndpoint: string;
+  restApiEndpoint: string;
+  waxApiCaller?: string;
+  apiTimeout: number;
+}
+```
+
+## Error handling
+
+```typescript
+try {
+  const result = await chain.api.database_api.find_accounts({
+    accounts: ["nonexistent"]
+  });
+} catch (error) {
+  if (error instanceof WaxError) {
+    console.error('WAX error:', error.message);
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+## See also
+
+- [createHiveChain](/api/typescript/wax-factory#createhivechain) - Factory function
+- [IWaxBaseInterface](/api/typescript/wax-base-interface) - Base interface methods
+- [ITransaction](/api/typescript/transaction) - Transaction interface

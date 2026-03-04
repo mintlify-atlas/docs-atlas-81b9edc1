@@ -1,0 +1,539 @@
+---
+title: Transaction interface
+description: Build, sign, and serialize Hive blockchain transactions
+---
+
+The `ITransaction` interface represents a Hive blockchain transaction. Transactions contain operations, can be signed with keys, and can be serialized for broadcasting.
+
+## Creating transactions
+
+Create transactions using factory methods:
+
+```python
+from wax import create_wax_foundation, create_hive_chain
+from datetime import timedelta
+
+# Offline transaction (requires manual TAPOS)
+wax = create_wax_foundation()
+tx = wax.create_transaction_with_tapos(
+    tapos_block_id="0000beef...",
+    expiration=timedelta(minutes=1)
+)
+
+# Online transaction (automatic TAPOS)
+chain = create_hive_chain()
+tx = await chain.create_transaction()
+```
+
+## Properties
+
+### transaction
+
+Returns the underlying proto transaction with TAPOS and expiration applied.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+proto_tx = tx.transaction
+
+print(proto_tx.ref_block_num)
+print(proto_tx.ref_block_prefix)
+print(proto_tx.expiration)
+```
+
+<ResponseField name="transaction" type="ProtoTransaction">
+  Proto transaction object with all fields populated.
+</ResponseField>
+
+---
+
+### is_signed
+
+Checks if the transaction has been signed at least once.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+print(tx.is_signed)  # False
+
+await tx.sign(wallet=wallet, public_key="STM...")
+print(tx.is_signed)  # True
+```
+
+<ResponseField name="is_signed" type="bool">
+  `True` if transaction has one or more signatures, `False` otherwise.
+</ResponseField>
+
+---
+
+### sig_digest
+
+Returns the transaction signature digest for signing (uses HF26 serialization).
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+digest = tx.sig_digest
+print(digest)  # Hex string like "abcd1234..."
+```
+
+<ResponseField name="sig_digest" type="SigDigest">
+  Hexadecimal signature digest of the transaction.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction or chain ID is invalid.
+
+---
+
+### impacted_accounts
+
+Returns list of account names impacted by the transaction.
+
+```python
+from wax.proto.operations import transfer
+
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo=""
+    )
+)
+
+print(tx.impacted_accounts)  # ["alice", "bob"]
+```
+
+<ResponseField name="impacted_accounts" type="list[AccountName]">
+  List of unique account names impacted by all operations in the transaction.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if any account name is invalid.
+
+---
+
+### id
+
+Returns the transaction ID (uses HF26 serialization).
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+await tx.sign(wallet=wallet, public_key="STM...")
+
+print(tx.id)  # "f3a1b2c3..."
+```
+
+<ResponseField name="id" type="TransactionId">
+  Hexadecimal transaction ID.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### signature_keys
+
+Returns public keys recovered from transaction signatures.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+await tx.sign(wallet=wallet, public_key="STM7...")
+
+keys = tx.signature_keys
+print(keys)  # ["STM7..."]
+```
+
+<ResponseField name="signature_keys" type="list[PublicKey]">
+  List of public keys extracted from signatures.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### required_authorities
+
+Returns required authority accounts categorized by authority type.
+
+```python
+from wax.proto.operations import transfer, vote
+
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(
+    transfer(from_account="alice", to_account="bob", amount=wax.hive.satoshis(1000), memo="")
+)
+tx.push_operation(
+    vote(voter="alice", author="bob", permlink="post", weight=10000)
+)
+
+auths = tx.required_authorities
+print(auths.active_accounts)   # {"alice"}  (for transfer)
+print(auths.posting_accounts)  # {"alice"}  (for vote)
+print(auths.owner_accounts)    # set()
+print(auths.other_authorities) # []
+```
+
+<ResponseField name="required_authorities" type="ITransactionRequiredAuthorities">
+  Object with properties:
+  - `posting_accounts`: Set of accounts requiring posting authority
+  - `active_accounts`: Set of accounts requiring active authority
+  - `owner_accounts`: Set of accounts requiring owner authority
+  - `other_authorities`: List of custom authority structures
+</ResponseField>
+
+---
+
+## Methods
+
+### push_operation
+
+Adds an operation to the transaction.
+
+```python
+from wax.proto.operations import transfer, vote
+
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+
+# Push operations (method chaining supported)
+tx.push_operation(
+    transfer(
+        from_account="alice",
+        to_account="bob",
+        amount=wax.hive.satoshis(1000),
+        memo="Payment"
+    )
+).push_operation(
+    vote(
+        voter="alice",
+        author="bob",
+        permlink="example-post",
+        weight=10000
+    )
+)
+```
+
+<ParamField path="operation" type="WaxMetaOperation" required>
+  Operation to add. Can be a proto operation (from `wax.proto.operations`).
+</ParamField>
+
+<ResponseField name="return" type="Self">
+  Returns the transaction instance for method chaining.
+</ResponseField>
+
+---
+
+### validate
+
+Validates the transaction structure and contents.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+try:
+    tx.validate()
+    print("Transaction is valid")
+except WaxValidationFailedError as e:
+    print(f"Validation failed: {e}")
+```
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### sign
+
+Signs the transaction asynchronously using a wallet.
+
+```python
+import asyncio
+from beekeepy import AsyncBeekeeper
+from wax import create_hive_chain
+from wax.proto.operations import vote
+
+async def main():
+    chain = create_hive_chain()
+    tx = await chain.create_transaction()
+    
+    tx.push_operation(
+        vote(voter="alice", author="bob", permlink="post", weight=10000)
+    )
+    
+    async with await AsyncBeekeeper.factory() as beekeeper:
+        session = await beekeeper.create_session(salt="")
+        wallet = await session.create_wallet(name="my_wallet", password="secret")
+        await wallet.import_key(private_key="5J...")
+        
+        # Sign transaction
+        signature = await tx.sign(wallet=wallet, public_key="STM7...")
+        print(f"Signature: {signature}")
+    
+    chain.teardown()
+
+asyncio.run(main())
+```
+
+<ParamField path="wallet" type="AsyncUnlockedWallet" required>
+  Unlocked Beekeeper wallet instance containing the private key.
+</ParamField>
+
+<ParamField path="public_key" type="PublicKey" required>
+  Public key corresponding to the private key to use for signing. The key must exist in the wallet.
+</ParamField>
+
+<ResponseField name="return" type="Signature">
+  Hexadecimal transaction signature.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### add_signature
+
+Manually adds a signature to the transaction.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+# Get signature from external source
+external_signature = "1f2e3d4c..."
+
+# Add to transaction
+tx.add_signature(external_signature)
+```
+
+<ParamField path="signature" type="Signature" required>
+  Hexadecimal signature to add to the transaction.
+</ParamField>
+
+<ResponseField name="return" type="Signature">
+  The signature that was added.
+</ResponseField>
+
+---
+
+## Serialization methods
+
+### to_string
+
+Converts transaction to protobuf JSON string.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+json_str = tx.to_string()
+print(json_str)
+# {"ref_block_num":48879,"ref_block_prefix":123456,...}
+```
+
+<ResponseField name="return" type="str">
+  Protobuf JSON representation of the transaction.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### to_binary_form
+
+Serializes transaction to HF26 binary format as hex string.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+hex_binary = tx.to_binary_form()
+print(hex_binary)  # "abcd1234..."
+```
+
+<ResponseField name="return" type="Hex">
+  Transaction serialized in HF26 binary format as hexadecimal string.
+</ResponseField>
+
+---
+
+### to_api
+
+Converts transaction to Hive API string format.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+api_str = tx.to_api()
+print(api_str)
+```
+
+<ResponseField name="return" type="str">
+  Transaction in Hive API string format.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### to_dict
+
+Converts transaction to Hive API dictionary format.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+api_dict = tx.to_dict()
+print(api_dict["ref_block_num"])
+print(api_dict["operations"])
+```
+
+<ResponseField name="return" type="dict[str, Any]">
+  Transaction in Hive API dictionary format.
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+### to_api_json
+
+Converts transaction to Hive API JSON format.
+
+```python
+tx = wax.create_transaction_with_tapos(tapos_block_id="...")
+tx.push_operation(...)
+
+api_json = tx.to_api_json()
+# Use for broadcasting
+await chain.api.network_broadcast_api.broadcast_transaction(trx=api_json)
+```
+
+<ResponseField name="return" type="JsonTransaction">
+  Transaction in Hive API JSON format (string).
+</ResponseField>
+
+**Raises:** `WaxValidationFailedError` if transaction is invalid.
+
+---
+
+## Online transaction interface
+
+The `IOnlineTransaction` extends `ITransaction` with on-chain verification.
+
+### perform_on_chain_verification
+
+Verifies the transaction against the blockchain.
+
+```python
+import asyncio
+from wax import create_hive_chain
+from wax.proto.operations import transfer
+
+async def main():
+    chain = create_hive_chain()
+    tx = await chain.create_transaction()
+    
+    tx.push_operation(
+        transfer(
+            from_account="alice",
+            to_account="bob",
+            amount=chain.hive.satoshis(1000),
+            memo="Payment"
+        )
+    )
+    
+    try:
+        # Verify accounts exist and no private keys leaked
+        await tx.perform_on_chain_verification()
+        print("Transaction verified")
+    except AccountNotFoundError as e:
+        print(f"Account not found: {e}")
+    except PrivateKeyDetectedInMemoError as e:
+        print(f"Private key detected: {e}")
+    
+    chain.teardown()
+
+asyncio.run(main())
+```
+
+This method:
+- Checks all impacted accounts exist on the blockchain
+- Scans operation contents for private key leaks
+
+**Raises:**
+- `AccountNotFoundError` - If any impacted account doesn't exist
+- `PrivateKeyDetectedInMemoError` - If private key detected in operation content
+
+<Note>
+When using `chain.broadcast()` with an `IOnlineTransaction`, this verification is called automatically before broadcasting.
+</Note>
+
+---
+
+## Complete example
+
+```python
+import asyncio
+from datetime import timedelta
+from wax import create_hive_chain
+from wax.proto.operations import transfer, vote
+from beekeepy import AsyncBeekeeper
+
+async def main():
+    chain = create_hive_chain()
+    
+    try:
+        # Create transaction
+        tx = await chain.create_transaction(expiration=timedelta(minutes=2))
+        
+        # Add operations
+        tx.push_operation(
+            transfer(
+                from_account="alice",
+                to_account="bob",
+                amount=chain.hive.satoshis(1000),
+                memo="Payment for services"
+            )
+        ).push_operation(
+            vote(
+                voter="alice",
+                author="bob",
+                permlink="great-post",
+                weight=10000
+            )
+        )
+        
+        # Inspect transaction
+        print(f"Impacted accounts: {tx.impacted_accounts}")
+        print(f"Required authorities: {tx.required_authorities.active_accounts}")
+        print(f"Signature digest: {tx.sig_digest}")
+        
+        # Validate
+        tx.validate()
+        
+        # Sign
+        async with await AsyncBeekeeper.factory() as beekeeper:
+            session = await beekeeper.create_session(salt="")
+            wallet = await session.create_wallet(name="wallet", password="pass")
+            await wallet.import_key(private_key="5J...")
+            
+            signature = await tx.sign(wallet=wallet, public_key="STM...")
+            print(f"Signed: {signature}")
+        
+        print(f"Is signed: {tx.is_signed}")
+        print(f"Signature keys: {tx.signature_keys}")
+        
+        # Verify and broadcast
+        await tx.perform_on_chain_verification()
+        await chain.broadcast(tx)
+        
+        print(f"Transaction {tx.id} broadcasted successfully")
+        
+    finally:
+        chain.teardown()
+
+asyncio.run(main())
+```
