@@ -1,0 +1,164 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "WAX",
+  "projectDescription": "A high-performance SDK library that provides Hive blockchain protocol features to Python and JavaScript/TypeScript applications.",
+  "theme": "palm",
+  "primaryColor": "#e31337",
+  "lightColor": "#ff4d6d",
+  "darkColor": "#b30f2b",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/transactions",
+              "concepts/operations",
+              "concepts/signing"
+            ]
+          },
+          {
+            "group": "Python SDK",
+            "pages": [
+              "python/overview",
+              "python/installation",
+              "python/wax-foundation",
+              "python/hive-chain",
+              "python/transactions",
+              "python/api-calls",
+              "python/examples"
+            ]
+          },
+          {
+            "group": "TypeScript SDK",
+            "pages": [
+              "typescript/overview",
+              "typescript/installation",
+              "typescript/wax-foundation",
+              "typescript/hive-chain",
+              "typescript/transactions",
+              "typescript/api-calls",
+              "typescript/framework-integration",
+              "typescript/examples"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building-transactions",
+              "guides/signing-transactions",
+              "guides/broadcasting",
+              "guides/complex-operations",
+              "guides/api-extensions",
+              "guides/formatters"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "extensions/overview",
+              "extensions/signers-beekeeper",
+              "extensions/signers-keychain",
+              "extensions/signers-metamask",
+              "extensions/signers-peakvault",
+              "extensions/api-definitions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python API",
+            "pages": [
+              "api/python/wax-factory",
+              "api/python/wax-base-interface",
+              "api/python/hive-chain-interface",
+              "api/python/transaction",
+              "api/python/operations",
+              "api/python/models"
+            ]
+          },
+          {
+            "group": "TypeScript API",
+            "pages": [
+              "api/typescript/wax-factory",
+              "api/typescript/wax-base-interface",
+              "api/typescript/hive-chain-interface",
+              "api/typescript/transaction",
+              "api/typescript/operations",
+              "api/typescript/interfaces"
+            ]
+          },
+          {
+            "group": "Hive APIs",
+            "pages": [
+              "api/hive/database-api",
+              "api/hive/block-api",
+              "api/hive/network-broadcast-api",
+              "api/hive/account-by-key-api"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Additional Resources",
+            "pages": [
+              "resources/building",
+              "resources/testing",
+              "resources/contributing",
+              "resources/changelog",
+              "resources/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Dual-language SDK for Python and TypeScript/JavaScript with WASM and Cython bindings",
+    "Create, sign, and broadcast Hive blockchain transactions",
+    "Offline transaction building with createWaxFoundation/create_wax_foundation",
+    "Online blockchain operations with createHiveChain/create_hive_chain",
+    "Pluggable signing providers (Beekeeper, Keychain, MetaMask, PeakVault)",
+    "Extendable API and REST API interfaces",
+    "Protocol buffer-based operations from hived C++ source",
+    "Multi-framework support (Next.js, React, Vue, Nuxt, Node.js)",
+    "Custom formatters for transaction output",
+    "Complex operations for account updates, voting, transfers, and proposals"
+  ],
+  "publicApiSurface": [
+    "createWaxFoundation() / create_wax_foundation()",
+    "createHiveChain() / create_hive_chain()",
+    "IWaxBaseInterface.createTransaction()",
+    "IWaxBaseInterface.pushOperation()",
+    "IWaxBaseInterface.calculateManabarFullRegenerationTime()",
+    "IHiveChainInterface.api.*",
+    "IHiveChainInterface.broadcast()",
+    "ITransaction.sign()",
+    "ITransaction.validate()",
+    "hiveCoins() / vests() / hbd()",
+    "encodeToProto() / decodeFromProto()",
+    "getTransactionId()",
+    "calculateManabarRegenerationTime()",
+    "complexOperations.updateAccount()",
+    "complexOperations.comment()",
+    "complexOperations.vote()",
+    "complexOperations.recurrentTransfer()"
+  ]
+}
